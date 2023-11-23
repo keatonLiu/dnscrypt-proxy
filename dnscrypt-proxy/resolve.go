@@ -136,36 +136,35 @@ func Resolve(server string, name string, singleResolver bool) {
 		}
 	}
 
-	if singleResolver {
-		for once := true; once; once = false {
-			fmt.Printf("Lying         : ")
-			response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
-			if err != nil {
-				break
-			}
-			if response.Rcode == dns.RcodeSuccess {
-				fmt.Println("yes. That resolver returns wrong responses")
-			} else if response.Rcode == dns.RcodeNameError {
-				fmt.Println("no")
-			} else {
-				fmt.Printf("unknown - query returned %s\n", dns.RcodeToString[response.Rcode])
-			}
+	for once := true; once; once = false {
+		// Check if the resolver returns a wrong response using a nonexistent name
+		fmt.Printf("Lying         : ")
+		response, err := resolveQuery(server, nonexistentName, dns.TypeA, false)
+		if err != nil {
+			break
+		}
+		if response.Rcode == dns.RcodeSuccess {
+			fmt.Println("yes. That resolver returns wrong responses")
+		} else if response.Rcode == dns.RcodeNameError {
+			fmt.Println("no")
+		} else {
+			fmt.Printf("unknown - query returned %s\n", dns.RcodeToString[response.Rcode])
+		}
 
-			if response.Rcode == dns.RcodeNameError {
-				fmt.Printf("DNSSEC        : ")
-				if response.AuthenticatedData {
-					fmt.Println("yes, the resolver supports DNSSEC")
-				} else {
-					fmt.Println("no, the resolver doesn't support DNSSEC")
-				}
-			}
-
-			fmt.Printf("ECS           : ")
-			if clientSubnet != "" {
-				fmt.Println("client network address is sent to authoritative servers")
+		if response.Rcode == dns.RcodeNameError {
+			fmt.Printf("DNSSEC        : ")
+			if response.AuthenticatedData {
+				fmt.Println("yes, the resolver supports DNSSEC")
 			} else {
-				fmt.Println("ignored or selective")
+				fmt.Println("no, the resolver doesn't support DNSSEC")
 			}
+		}
+
+		fmt.Printf("ECS           : ")
+		if clientSubnet != "" {
+			fmt.Println("client network address is sent to authoritative servers")
+		} else {
+			fmt.Println("ignored or selective")
 		}
 	}
 
@@ -380,4 +379,37 @@ cname:
 	}
 
 	fmt.Println("")
+}
+
+func ResolveIpv4(server string, name string) {
+	host, port := ExtractHostAndPort(server, 53)
+	if host == "0.0.0.0" {
+		host = "127.0.0.1"
+	} else if host == "[::]" {
+		host = "[::1]"
+	}
+	server = fmt.Sprintf("%s:%d", host, port)
+
+	fmt.Printf("Resolving [%s] using %s port %d\n\n", name, host, port)
+	name = dns.Fqdn(name)
+
+	for once := true; once; once = false {
+		fmt.Printf("IPv4 addresses: ")
+		response, err := resolveQuery(server, name, dns.TypeA, false)
+		if err != nil {
+			break
+		}
+		ipv4 := make([]string, 0)
+		for _, answer := range response.Answer {
+			if answer.Header().Rrtype != dns.TypeA || answer.Header().Class != dns.ClassINET {
+				continue
+			}
+			ipv4 = append(ipv4, answer.(*dns.A).A.String())
+		}
+		if len(ipv4) == 0 {
+			fmt.Println("-")
+		} else {
+			fmt.Println(strings.Join(ipv4, ", "))
+		}
+	}
 }

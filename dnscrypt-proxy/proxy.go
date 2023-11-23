@@ -4,6 +4,7 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"math/rand"
 	"net"
 	"os"
@@ -626,11 +627,16 @@ func (proxy *Proxy) processIncomingQuery(
 	pluginsState := NewPluginsState(proxy, clientProto, clientAddr, serverProto, start)
 	serverName := "-"
 	needsEDNS0Padding := false
+
+	// Select a server first
 	serverInfo := proxy.serversInfo.getOne()
 	if serverInfo != nil {
 		serverName = serverInfo.Name
-		needsEDNS0Padding = (serverInfo.Proto == stamps.StampProtoTypeDoH || serverInfo.Proto == stamps.StampProtoTypeTLS)
+		needsEDNS0Padding = serverInfo.Proto == stamps.StampProtoTypeDoH ||
+			serverInfo.Proto == stamps.StampProtoTypeTLS
 	}
+
+	// apply query plugins to that query
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
 	if len(query) < MinDNSPacketSize || len(query) > MaxDNSPacketSize {
 		return response
@@ -658,6 +664,8 @@ func (proxy *Proxy) processIncomingQuery(
 	if len(response) == 0 && serverInfo != nil {
 		var ttl *uint32
 		pluginsState.serverName = serverName
+
+		// DNSCrypt, DOH, ODOH
 		if serverInfo.Proto == stamps.StampProtoTypeDNSCrypt {
 			sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, query, serverProto)
 			if err != nil && serverProto == "udp" {
@@ -875,5 +883,19 @@ func (proxy *Proxy) processIncomingQuery(
 func NewProxy() *Proxy {
 	return &Proxy{
 		serversInfo: NewServersInfo(),
+	}
+}
+
+func (proxy *Proxy) ListAvailableServers() {
+	for _, server := range proxy.serversInfo.inner {
+		fmt.Printf("name: %s, rtt: %.2fms, initial rtt: %dms",
+			server.Name, server.rtt.Value(), server.initialRtt)
+
+		if server.UDPAddr != nil {
+			fmt.Printf(", udp: %s", server.UDPAddr.String())
+		} else if server.TCPAddr != nil {
+			fmt.Printf(", tcp: %s", server.TCPAddr.String())
+		}
+		fmt.Println()
 	}
 }

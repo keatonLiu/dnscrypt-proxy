@@ -105,6 +105,21 @@ func main() {
 		}
 		return
 	}
+
+	// enable command interaction
+	go func() {
+		for {
+			// get command input
+			var cmd string
+			fmt.Scanln(&cmd)
+			// handle command
+			switch cmd {
+			case "list":
+				app.proxy.ListAvailableServers()
+			}
+		}
+	}()
+
 	if svc != nil {
 		if err := svc.Run(); err != nil {
 			dlog.Fatal(err)

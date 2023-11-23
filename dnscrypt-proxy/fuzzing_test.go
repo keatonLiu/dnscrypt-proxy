@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	stamps "github.com/jedisct1/go-dnsstamps"
@@ -34,8 +35,10 @@ func FuzzParseStampParser(f *testing.F) {
 	f.Add("sdns://BQcAAAAAAAAADm9kb2guY3J5cHRvLnN4Ci9kbnMtcXVlcnk")
 	f.Add("sdns://hQcAAAAAAAAAACCi3jNJDEdtNW4tvHN8J3lpIklSa2Wrj7qaNCgEgci9_BpvZG9oLXJlbGF5LmVkZ2Vjb21wdXRlLmFwcAEv")
 	f.Fuzz(func(t *testing.T, stamp string) {
-		if _, err := stamps.NewServerStampFromString(stamp); err != nil {
+		if stamp, err := stamps.NewServerStampFromString(stamp); err != nil {
 			t.Skip()
+		} else {
+			fmt.Println(stamp)
 		}
 	})
 }
