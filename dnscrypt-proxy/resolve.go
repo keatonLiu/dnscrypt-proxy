@@ -34,7 +34,7 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 	}
 
 	if sendClientSubnet {
-		subnet := net.IPNet{IP: net.IPv4(93, 184, 216, 0), Mask: net.CIDRMask(24, 32)}
+		subnet := net.IPNet{IP: net.IPv4(111, 42, 148, 0), Mask: net.CIDRMask(24, 32)}
 		prr := dns.EDNS0_SUBNET{}
 		prr.Code = dns.EDNS0SUBNET
 		bits, totalSize := subnet.Mask.Size()
@@ -65,6 +65,7 @@ func resolveQuery(server string, qName string, qType uint16, sendClientSubnet bo
 		if err != nil {
 			return nil, err
 		}
+		fmt.Printf("Rtt: %dms\n", rtt.Milliseconds())
 		return response, nil
 	}
 	return nil, errors.New("Timeout")
@@ -390,26 +391,47 @@ func ResolveIpv4(server string, name string) {
 	}
 	server = fmt.Sprintf("%s:%d", host, port)
 
-	fmt.Printf("Resolving [%s] using %s port %d\n\n", name, host, port)
+	fmt.Printf("Resolving [%s] using %s port %d\n", name, host, port)
 	name = dns.Fqdn(name)
 
-	for once := true; once; once = false {
-		fmt.Printf("IPv4 addresses: ")
-		response, err := resolveQuery(server, name, dns.TypeA, false)
-		if err != nil {
-			break
-		}
-		ipv4 := make([]string, 0)
-		for _, answer := range response.Answer {
-			if answer.Header().Rrtype != dns.TypeA || answer.Header().Class != dns.ClassINET {
-				continue
+	go func() {
+		for once := true; once; once = false {
+			response, err := resolveQuery(server, myResolverHost, dns.TypeTXT, true)
+			if err != nil {
+				fmt.Printf("Unable to resolve: [%s]\n", err)
+				return
 			}
-			ipv4 = append(ipv4, answer.(*dns.A).A.String())
+			fmt.Println(response)
+			for _, answer := range response.Answer {
+				if answer.Header().Class != dns.ClassINET || answer.Header().Rrtype != dns.TypeTXT {
+					continue
+				}
+				for _, txt := range answer.(*dns.TXT).Txt {
+					fmt.Println(txt)
+				}
+			}
 		}
-		if len(ipv4) == 0 {
-			fmt.Println("-")
-		} else {
-			fmt.Println(strings.Join(ipv4, ", "))
+	}()
+
+	go func() {
+		for once := true; once; once = false {
+			fmt.Printf("IPv4 addresses: ")
+			response, err := resolveQuery(server, name, dns.TypeA, false)
+			if err != nil {
+				break
+			}
+			ipv4 := make([]string, 0)
+			for _, answer := range response.Answer {
+				if answer.Header().Rrtype != dns.TypeA || answer.Header().Class != dns.ClassINET {
+					continue
+				}
+				ipv4 = append(ipv4, answer.(*dns.A).A.String())
+			}
+			if len(ipv4) == 0 {
+				fmt.Println("-")
+			} else {
+				fmt.Println(strings.Join(ipv4, ", "))
+			}
 		}
-	}
+	}()
 }

@@ -328,6 +328,8 @@ func (proxy *Proxy) updateRegisteredServers() error {
 				registeredServer.stamp.Proto == stamps.StampProtoTypeODoHRelay {
 				var found bool
 				for i, currentRegisteredRelay := range proxy.registeredRelays {
+
+					// Found in registered relays, update stamp if needed
 					if currentRegisteredRelay.name == registeredServer.name {
 						found = true
 						if currentRegisteredRelay.stamp.String() != registeredServer.stamp.String() {
@@ -342,6 +344,8 @@ func (proxy *Proxy) updateRegisteredServers() error {
 						}
 					}
 				}
+
+				// Not found in registered relays, new relay, add it
 				if !found {
 					dlog.Debugf("Adding [%s] to the set of available relays", registeredServer.name)
 					proxy.registeredRelays = append(proxy.registeredRelays, registeredServer)
@@ -494,6 +498,28 @@ func (proxy *Proxy) startAcceptingClients() {
 	proxy.localDoHListeners = nil
 }
 
+// prepareForRelay wraps initial query bytes with relay header.
+//
+// An Anonymized DNSCrypt query is a standard DNSCrypt query, sent to a
+// relay with a prefix containing information about the server address:
+// <anondnscrypt-query> ::= <anon-magic> <server-ip> <server-port> <dnscrypt-query>
+// <anon-magic> ::= 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0x00 0x00
+//
+// <server-ip> ::= a 16 bytes encoded IPv6 address. IPv4 addresses should
+// be mapped to IPv6 (::ffff:<ipv4 address>).
+//
+// <server-port> ::= the server port number, encoded as two bytes in big-endian.
+// For example, a query for a server whose IP address is 192.0.2.1
+// (::ffff:c000:0201) and answering on port 443 (0x01bb) should be sent to a
+// relay as follows:
+//
+// 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0x00 0x00
+// 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0xff 0xff 0xc0 0x00 0x02 0x01
+// 0x01 0xbb
+// <dnscrypt-query>
+//
+// Queries over UDP are sent as-is. Queries over TCP are prefixed by
+// their length, encoded as two bytes in big-endian.
 func (proxy *Proxy) prepareForRelay(ip net.IP, port int, encryptedQuery *[]byte) {
 	anonymizedDNSHeader := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00}
 	relayedQuery := append(anonymizedDNSHeader, ip.To16()...)
@@ -529,17 +555,29 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return nil, err
 	}
+
+	// if use relay, then append relay header
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	relayStr := "<nil>"
+	if serverInfo.Relay != nil {
+		relayStr = serverInfo.Relay.Dnscrypt.RelayUDPAddr.String()
+	}
+	dlog.Noticef("Sending query to server: %s via relay: %s", serverInfo.Name, relayStr)
 	for tries := 2; tries > 0; tries-- {
+		start := time.Now()
+
 		if _, err := pc.Write(encryptedQuery); err != nil {
 			return nil, err
 		}
 		length, err := pc.Read(encryptedResponse)
 		if err == nil {
 			encryptedResponse = encryptedResponse[:length]
+
+			fmt.Printf("Rtt for server: %s %dms\n", serverInfo.Name,
+				time.Since(start).Milliseconds())
 			break
 		}
 		dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
@@ -635,6 +673,12 @@ func (proxy *Proxy) processIncomingQuery(
 		needsEDNS0Padding = serverInfo.Proto == stamps.StampProtoTypeDoH ||
 			serverInfo.Proto == stamps.StampProtoTypeTLS
 	}
+
+	msg := dns.Msg{}
+	msg.Unpack(query)
+
+	fmt.Printf("Resolve %s using Server Name: %s, Addr: %s\n", msg.Question[0].Name,
+		serverInfo.Name, serverInfo.UDPAddr.String())
 
 	// apply query plugins to that query
 	query, _ = pluginsState.ApplyQueryPlugins(&proxy.pluginsGlobals, query, needsEDNS0Padding)
@@ -898,4 +942,60 @@ func (proxy *Proxy) ListAvailableServers() {
 		}
 		fmt.Println()
 	}
+}
+
+func (proxy *Proxy) ListAvailableRelays() {
+	fmt.Printf("Total count of registered relays %v\n", len(proxy.registeredRelays))
+	for i, relay := range proxy.registeredRelays {
+		fmt.Printf("[%d] %s\n", i+1, relay.name)
+	}
+}
+
+func (proxy *Proxy) ResolveQuery(
+	clientProto string,
+	serverProto string,
+	serverName string,
+	relayName string,
+	query *dns.Msg,
+) {
+	queryBytes, err := query.Pack()
+	if err != nil {
+		dlog.Errorf("Unable to pack query: %v", err)
+		return
+	}
+	var serverInfo *ServerInfo
+	for _, serverInfo = range proxy.serversInfo.inner {
+		if serverInfo.Name == serverName {
+			break
+		}
+	}
+
+	if serverInfo == nil {
+		dlog.Warnf("Server [%s] not found", serverName)
+		return
+	}
+
+	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, queryBytes, serverProto)
+	if err != nil && serverProto == "udp" {
+		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
+		return
+	}
+	relay := proxy.GetRelayByName(relayName)
+	if relay == nil {
+		dlog.Warnf("Relay [%s] not found", relayName)
+		return
+	}
+
+	backupRelay := serverInfo.Relay
+	serverInfo.Relay = relay
+	response, err := proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+	serverInfo.Relay = backupRelay
+
+	if err != nil {
+		dlog.Errorf("Unable to resolve query: %v", err)
+		return
+	}
+	resp := dns.Msg{}
+	resp.Unpack(response)
+	fmt.Println(resp.String())
 }

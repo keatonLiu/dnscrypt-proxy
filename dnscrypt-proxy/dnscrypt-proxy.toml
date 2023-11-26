@@ -67,7 +67,7 @@ ipv6_servers = false
 dnscrypt_servers = true
 
 # Use servers implementing the DNS-over-HTTPS protocol
-doh_servers = true
+doh_servers = false
 
 # Use servers implementing the Oblivious DoH protocol
 odoh_servers = false
@@ -842,7 +842,7 @@ fragments_blocked = ['cisco', 'cisco-ipv6', 'cisco-familyshield', 'cisco-familys
 
 routes = [
 #  { server_name='myserver', via=['myrelay'] },
-  { server_name='*', via=['myrelay'] },
+  { server_name='*', via=['*'] },
 ]
 
 

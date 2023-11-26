@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bufio"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"github.com/miekg/dns"
 	"math/rand"
+	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
 )
@@ -106,16 +111,77 @@ func main() {
 		return
 	}
 
+	go func() {
+		r := gin.Default()
+		// gin.H is a shortcut for map[string]any
+		r.GET("/servers/list", func(c *gin.Context) {
+			c.JSON(http.StatusOK, app.packServersInfoJson())
+		})
+		r.GET("/servers/refresh", func(c *gin.Context) {
+			app.proxy.serversInfo.refresh(app.proxy)
+			c.JSON(http.StatusOK, app.packServersInfoJson())
+		})
+
+		r.Run(":8080")
+		dlog.Noticef("API Server started at %s", ":8080")
+	}()
+
+	scanner := bufio.NewScanner(os.Stdin)
 	// enable command interaction
 	go func() {
 		for {
 			// get command input
 			var cmd string
-			fmt.Scanln(&cmd)
+			if !scanner.Scan() {
+				break
+			}
+			cmd = scanner.Text()
+			cmd = strings.TrimSpace(cmd)
+			cmds := strings.Split(cmd, " ")
+			cmd = cmds[0]
+			args := cmds[1:]
 			// handle command
 			switch cmd {
 			case "list":
 				app.proxy.ListAvailableServers()
+			case "list-r":
+				app.proxy.ListAvailableRelays()
+			case "refresh":
+				app.proxy.serversInfo.refresh(app.proxy)
+			case "resolve":
+				var name string
+				if len(args) == 0 {
+					name = "www.google.com"
+				} else {
+					name = args[0]
+				}
+				ResolveIpv4("127.0.0.1:53", name)
+			case "test":
+				var server string
+				var name string
+				var relayName string
+				server = "myserver"
+				name = "www.bilibili.com"
+				relayName = "myrelay"
+
+				if len(args) == 1 {
+					name = args[0]
+				} else if len(args) == 2 {
+					name = args[0]
+					server = args[1]
+				} else if len(args) == 3 {
+					name = args[0]
+					server = args[1]
+					relayName = args[2]
+				}
+
+				// make a query for www.google.com
+				q := new(dns.Msg)
+				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
+
+				app.proxy.ResolveQuery(
+					"udp", "udp", server,
+					relayName, q)
 			}
 		}
 	}()
@@ -127,6 +193,15 @@ func main() {
 	} else {
 		app.Start(nil)
 	}
+}
+
+func (app *App) packServersInfoJson() gin.H {
+	app.proxy.serversInfo.RLock()
+	defer app.proxy.serversInfo.RUnlock()
+	res := gin.H{
+		"data": app.proxy.serversInfo.inner,
+	}
+	return res
 }
 
 func (app *App) Start(service service.Service) error {

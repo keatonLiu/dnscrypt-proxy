@@ -4,6 +4,7 @@ import (
 	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/bits"
@@ -44,7 +45,7 @@ type DOHClientCreds struct {
 }
 
 type ServerInfo struct {
-	DOHClientCreds     DOHClientCreds
+	DOHClientCreds     DOHClientCreds `json:"-"`
 	lastActionTS       time.Time
 	rtt                ewma.MovingAverage
 	Name               string
@@ -54,15 +55,31 @@ type ServerInfo struct {
 	Relay              *Relay
 	URL                *url.URL
 	initialRtt         int
-	Timeout            time.Duration
+	Timeout            time.Duration `json:"-"`
 	CryptoConstruction CryptoConstruction
-	ServerPk           [32]byte
-	SharedKey          [32]byte
-	MagicQuery         [8]byte
+	ServerPk           [32]byte `json:"-"`
+	SharedKey          [32]byte `json:"-"`
+	MagicQuery         [8]byte  `json:"-"`
 	knownBugs          ServerBugs
-	Proto              stamps.StampProtoType
+	Proto              stamps.StampProtoType `json:"-"`
 	useGet             bool
 	odohTargetConfigs  []ODoHTargetConfig
+}
+
+type ServerInfoMarshal ServerInfo
+
+func (serverInfo *ServerInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ServerInfoMarshal
+		Rtt        float64
+		InitialRtt int
+		Proto      string
+	}{
+		ServerInfoMarshal: ServerInfoMarshal(*serverInfo),
+		Rtt:               serverInfo.rtt.Value(),
+		InitialRtt:        serverInfo.initialRtt,
+		Proto:             serverInfo.Proto.String(),
+	})
 }
 
 type LBStrategy interface {
@@ -132,9 +149,21 @@ type ODoHRelay struct {
 }
 
 type Relay struct {
-	Proto    stamps.StampProtoType
+	Proto    stamps.StampProtoType `json:"-"`
 	Dnscrypt *DNSCryptRelay
 	ODoH     *ODoHRelay
+}
+
+type RelayMarshal Relay
+
+func (relay *Relay) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		RelayMarshal
+		Proto string
+	}{
+		RelayMarshal: RelayMarshal(*relay),
+		Proto:        relay.Proto.String(),
+	})
 }
 
 type ServersInfo struct {
@@ -183,13 +212,17 @@ func (serversInfo *ServersInfo) registerRelay(name string, stamp stamps.ServerSt
 
 func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp stamps.ServerStamp) error {
 	serversInfo.RLock()
-	isNew := true
-	for _, oldServer := range serversInfo.inner {
+
+	// -1 indicates no old server of that name was found
+	var indexOldServer = -1
+	for i, oldServer := range serversInfo.inner {
 		if oldServer.Name == name {
-			isNew = false
+			indexOldServer = i
 			break
 		}
 	}
+	isNew := indexOldServer == -1
+
 	serversInfo.RUnlock()
 	newServer, err := fetchServerInfo(proxy, name, stamp, isNew)
 	if err != nil {
@@ -198,19 +231,15 @@ func (serversInfo *ServersInfo) refreshServer(proxy *Proxy, name string, stamp s
 	if name != newServer.Name {
 		dlog.Fatalf("[%s] != [%s]", name, newServer.Name)
 	}
+
 	newServer.rtt = ewma.NewMovingAverage(RTTEwmaDecay)
 	newServer.rtt.Set(float64(newServer.initialRtt))
-	isNew = true
-	serversInfo.Lock()
-	for i, oldServer := range serversInfo.inner {
-		if oldServer.Name == name {
-			serversInfo.inner[i] = &newServer
-			isNew = false
-			break
-		}
-	}
-	serversInfo.Unlock()
-	if isNew {
+
+	if !isNew {
+		serversInfo.Lock()
+		serversInfo.inner[indexOldServer] = &newServer
+		serversInfo.Unlock()
+	} else {
 		serversInfo.Lock()
 		serversInfo.inner = append(serversInfo.inner, &newServer)
 		serversInfo.Unlock()
@@ -232,7 +261,6 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(registeredServers))
-
 	for i := range registeredServers {
 		go func(rs *RegisteredServer) {
 			if err = serversInfo.refreshServer(proxy, rs.name, rs.stamp); err == nil {
@@ -253,7 +281,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	inner := serversInfo.inner
 	innerLen := len(inner)
 	if innerLen > 1 {
-		dlog.Notice("Sorted latencies:")
+		dlog.Noticef("Sorted latencies:")
 		for i := 0; i < innerLen; i++ {
 			dlog.Noticef("- %5dms %s", inner[i].initialRtt, inner[i].Name)
 		}
@@ -261,6 +289,7 @@ func (serversInfo *ServersInfo) refresh(proxy *Proxy) (int, error) {
 	if innerLen > 0 {
 		dlog.Noticef("Server with the lowest initial latency: %s (rtt: %dms)", inner[0].Name, inner[0].initialRtt)
 	}
+	dlog.Noticef("Registered servers: %d, live servers: %d", len(serversInfo.registeredServers), liveServers)
 	serversInfo.Unlock()
 	return liveServers, err
 }
@@ -423,6 +452,43 @@ func relayProtoForServerProto(proto stamps.StampProtoType) (stamps.StampProtoTyp
 	default:
 		return 0, errors.New("protocol cannot be anonymized")
 	}
+}
+
+func (proxy *Proxy) GetRelayByName(relayName string) *Relay {
+	proxy.serversInfo.RLock()
+	defer proxy.serversInfo.RUnlock()
+
+	for _, registeredServer := range proxy.serversInfo.registeredRelays {
+		if registeredServer.name == relayName {
+			relayStamp := registeredServer.stamp
+			if relayStamp.Proto == stamps.StampProtoTypeDNSCryptRelay {
+				relayUDPAddr, err := net.ResolveUDPAddr("udp", relayStamp.ServerAddrStr)
+				if err != nil {
+					return nil
+				}
+				relayTCPAddr, err := net.ResolveTCPAddr("tcp", relayStamp.ServerAddrStr)
+				if err != nil {
+					return nil
+				}
+				return &Relay{
+					Proto:    stamps.StampProtoTypeDNSCryptRelay,
+					Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr},
+				}
+			} else if relayStamp.Proto == stamps.StampProtoTypeODoHRelay {
+				relayBaseURL, err := url.Parse(
+					"https://" + url.PathEscape(relayStamp.ProviderName) + relayStamp.Path,
+				)
+				if err != nil {
+					return nil
+				}
+				return &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{
+					URL: relayBaseURL,
+				}}
+			}
+		}
+	}
+
+	return nil
 }
 
 func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay, error) {

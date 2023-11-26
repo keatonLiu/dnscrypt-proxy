@@ -345,9 +345,9 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	if config.LogLevel >= 0 && config.LogLevel < int(dlog.SeverityLast) {
 		dlog.SetLogLevel(dlog.Severity(config.LogLevel))
 	}
-	if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
-		dlog.SetLogLevel(dlog.SeverityInfo)
-	}
+	//if dlog.LogLevel() <= dlog.SeverityDebug && os.Getenv("DEBUG") == "" {
+	//	dlog.SetLogLevel(dlog.SeverityInfo)
+	//}
 	dlog.TruncateLogFile(config.LogFileLatest)
 	proxy.showCerts = *flags.ShowCerts || len(os.Getenv("SHOW_CERTS")) > 0
 	isCommandMode := *flags.Check || proxy.showCerts || *flags.List || *flags.ListAll
@@ -874,6 +874,8 @@ func (config *Config) loadSources(proxy *Proxy) error {
 			return err
 		}
 	}
+
+	// load static relay servers from config
 	for name, config := range config.StaticsConfig {
 		if stamp, err := stamps.NewServerStampFromString(config.Stamp); err == nil {
 			if stamp.Proto == stamps.StampProtoTypeDNSCryptRelay || stamp.Proto == stamps.StampProtoTypeODoHRelay {
