@@ -218,9 +218,10 @@ func main() {
 				q := new(dns.Msg)
 				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
 
-				app.proxy.ResolveQuery(
+				res, _, _ := app.proxy.ResolveQuery(
 					"udp", "udp", server,
 					relayName, q)
+				fmt.Println(res)
 			}
 		}
 	}()
