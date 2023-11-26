@@ -576,13 +576,67 @@ func (proxy *Proxy) exchangeWithUDPServer(
 		if err == nil {
 			encryptedResponse = encryptedResponse[:length]
 
-			fmt.Printf("Rtt for server: %s %dms\n", serverInfo.Name,
-				time.Since(start).Milliseconds())
+			rtt := time.Since(start).Milliseconds()
+			dlog.Debugf("[%s] Rtt: %dms\n", serverInfo.Name, rtt)
 			break
 		}
 		dlog.Debugf("[%v] Retry on timeout", serverInfo.Name)
 	}
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+}
+
+func (proxy *Proxy) exchangeWithUDPServerOnce(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encryptedQuery []byte,
+	clientNonce []byte,
+) (resp []byte, rtt int64, err error) {
+	upstreamAddr := serverInfo.UDPAddr
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
+	}
+	var pc net.Conn
+	proxyDialer := proxy.xTransport.proxyDialer
+	if proxyDialer == nil {
+		pc, err = net.DialUDP("udp", nil, upstreamAddr)
+	} else {
+		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
+	}
+	if err != nil {
+		return
+	}
+	defer pc.Close()
+	if err = pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+		return
+	}
+
+	// if use relay, then append relay header
+	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
+		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
+	}
+	encryptedResponse := make([]byte, MaxDNSPacketSize)
+	relayStr := "<nil>"
+	if serverInfo.Relay != nil {
+		relayStr = serverInfo.Relay.Dnscrypt.RelayUDPAddr.String()
+	}
+	dlog.Noticef("Sending query to server: %s via relay: %s", serverInfo.Name, relayStr)
+
+	start := time.Now()
+	if _, err = pc.Write(encryptedQuery); err != nil {
+		return
+	}
+	var length int
+	length, err = pc.Read(encryptedResponse)
+	if err == nil {
+		encryptedResponse = encryptedResponse[:length]
+		rtt = time.Since(start).Milliseconds()
+		dlog.Debugf("[%s] Rtt: %dms\n", serverInfo.Name, rtt)
+	} else {
+		dlog.Debugf("[%v] Failed to resolve", serverInfo.Name)
+	}
+
+	resp, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+	return
 }
 
 func (proxy *Proxy) exchangeWithTCPServer(
@@ -676,8 +730,7 @@ func (proxy *Proxy) processIncomingQuery(
 
 	msg := dns.Msg{}
 	msg.Unpack(query)
-
-	fmt.Printf("Resolve %s using Server Name: %s, Addr: %s\n", msg.Question[0].Name,
+	dlog.Debugf("Resolve %s using Server Name: %s, Addr: %s\n", msg.Question[0].Name,
 		serverInfo.Name, serverInfo.UDPAddr.String())
 
 	// apply query plugins to that query
@@ -951,17 +1004,13 @@ func (proxy *Proxy) ListAvailableRelays() {
 	}
 }
 
-func (proxy *Proxy) ResolveQuery(
-	clientProto string,
-	serverProto string,
-	serverName string,
-	relayName string,
-	query *dns.Msg,
-) {
+func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverName string,
+	relayName string, query *dns.Msg) (resp *dns.Msg, rtt int64, err error) {
+
 	queryBytes, err := query.Pack()
 	if err != nil {
 		dlog.Errorf("Unable to pack query: %v", err)
-		return
+		return resp, rtt, err
 	}
 	var serverInfo *ServerInfo
 	for _, serverInfo = range proxy.serversInfo.inner {
@@ -972,14 +1021,16 @@ func (proxy *Proxy) ResolveQuery(
 
 	if serverInfo == nil {
 		dlog.Warnf("Server [%s] not found", serverName)
+		err = fmt.Errorf("server [%s] not found", serverName)
 		return
 	}
 
 	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, queryBytes, serverProto)
 	if err != nil && serverProto == "udp" {
 		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
-		return
+		return resp, rtt, err
 	}
+
 	relay := proxy.GetRelayByName(relayName)
 	if relay == nil {
 		dlog.Warnf("Relay [%s] not found", relayName)
@@ -988,14 +1039,16 @@ func (proxy *Proxy) ResolveQuery(
 
 	backupRelay := serverInfo.Relay
 	serverInfo.Relay = relay
-	response, err := proxy.exchangeWithUDPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+	response, rtt, err := proxy.exchangeWithUDPServerOnce(serverInfo, sharedKey, encryptedQuery, clientNonce)
 	serverInfo.Relay = backupRelay
 
 	if err != nil {
 		dlog.Errorf("Unable to resolve query: %v", err)
-		return
+		dlog.Errorf("%v", resp)
+		return resp, rtt, err
 	}
-	resp := dns.Msg{}
+	resp = &dns.Msg{}
 	resp.Unpack(response)
-	fmt.Println(resp.String())
+	//fmt.Println(resp.String())
+	return resp, rtt, err
 }

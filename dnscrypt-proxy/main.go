@@ -115,11 +115,50 @@ func main() {
 		r := gin.Default()
 		// gin.H is a shortcut for map[string]any
 		r.GET("/servers/list", func(c *gin.Context) {
-			c.JSON(http.StatusOK, app.packServersInfoJson())
+			app.proxy.serversInfo.RLock()
+			defer app.proxy.serversInfo.RUnlock()
+			c.JSON(http.StatusOK, gin.H{
+				"count": len(app.proxy.serversInfo.inner),
+				"data":  app.proxy.serversInfo.inner,
+			})
 		})
 		r.GET("/servers/refresh", func(c *gin.Context) {
 			app.proxy.serversInfo.refresh(app.proxy)
-			c.JSON(http.StatusOK, app.packServersInfoJson())
+			c.JSON(http.StatusOK, gin.H{
+				"msg": "ok",
+			})
+		})
+
+		r.GET("/relays/list", func(c *gin.Context) {
+			app.proxy.serversInfo.RLock()
+			defer app.proxy.serversInfo.RUnlock()
+			c.JSON(http.StatusOK, gin.H{
+				"count": len(app.proxy.registeredRelays),
+				"data":  app.proxy.registeredRelays,
+			})
+		})
+
+		r.POST("/resolve", func(c *gin.Context) {
+			var req ResolveRequestBody
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+
+			q := new(dns.Msg)
+			q.SetQuestion(dns.Fqdn(req.Name), dns.TypeA)
+
+			resp, rtt, err := app.proxy.ResolveQuery(
+				"udp", "udp", req.Server,
+				req.RelayName, q)
+			c.JSON(http.StatusOK, gin.H{
+				"rtt":    rtt,
+				"server": req,
+				"error":  err,
+				"data":   resp,
+			})
 		})
 
 		r.Run(":8080")
@@ -195,15 +234,6 @@ func main() {
 	}
 }
 
-func (app *App) packServersInfoJson() gin.H {
-	app.proxy.serversInfo.RLock()
-	defer app.proxy.serversInfo.RUnlock()
-	res := gin.H{
-		"data": app.proxy.serversInfo.inner,
-	}
-	return res
-}
-
 func (app *App) Start(service service.Service) error {
 	if service != nil {
 		go func() {
@@ -240,4 +270,10 @@ func (app *App) Stop(service service.Service) error {
 	}
 	dlog.Notice("Stopped.")
 	return nil
+}
+
+type ResolveRequestBody struct {
+	Name      string `json:"name"`
+	Server    string `json:"server"`
+	RelayName string `json:"relayName"`
 }

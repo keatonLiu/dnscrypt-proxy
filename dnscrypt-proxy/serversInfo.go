@@ -34,6 +34,28 @@ type RegisteredServer struct {
 	description string
 }
 
+type RegisteredServerMarshal RegisteredServer
+
+func (registeredServer *RegisteredServer) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		RegisteredServerMarshal
+		Name          string
+		Description   string
+		ServerAddrStr string
+		ProviderName  string
+		Path          string
+		Proto         string
+	}{
+		RegisteredServerMarshal: RegisteredServerMarshal(*registeredServer),
+		Name:                    registeredServer.name,
+		Description:             registeredServer.description,
+		ServerAddrStr:           registeredServer.stamp.ServerAddrStr,
+		ProviderName:            registeredServer.stamp.ProviderName,
+		Path:                    registeredServer.stamp.Path,
+		Proto:                   registeredServer.stamp.Proto.String(),
+	})
+}
+
 type ServerBugs struct {
 	fragmentsBlocked bool
 }
