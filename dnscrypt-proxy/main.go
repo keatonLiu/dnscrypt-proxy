@@ -334,7 +334,7 @@ func (app *App) dos() {
 		log.Println(err)
 	}
 	fmt.Println(path) // for example /home/user
-	records := readCsvFile("../prepared_list.csv")
+	records := readCsvFile("./prepared_list.csv")
 	for i, record := range records[1:] {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
