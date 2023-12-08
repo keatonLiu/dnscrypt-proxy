@@ -17,3 +17,6 @@ dnscrypt-proxy/dnscrypt-proxy
 contrib/msi/*.msi
 contrib/msi/*.wixpdb
 contrib/msi/*.wixobj
+/dnscrypt
+/dnscrypt.exe
+/prepared_list.csv

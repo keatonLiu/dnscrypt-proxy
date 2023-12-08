@@ -1039,7 +1039,16 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 
 	backupRelay := serverInfo.Relay
 	serverInfo.Relay = relay
-	response, rtt, err := proxy.exchangeWithUDPServerOnce(serverInfo, sharedKey, encryptedQuery, clientNonce)
+
+	var response []byte
+	if serverProto == "udp" {
+		response, rtt, err = proxy.exchangeWithUDPServerOnce(serverInfo, sharedKey, encryptedQuery, clientNonce)
+	} else {
+		start := time.Now()
+		response, err = proxy.exchangeWithTCPServer(serverInfo, sharedKey, encryptedQuery, clientNonce)
+		rtt = time.Since(start).Milliseconds()
+	}
+
 	serverInfo.Relay = backupRelay
 
 	if err != nil {
