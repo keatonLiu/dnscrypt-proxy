@@ -335,6 +335,8 @@ func (app *App) dos() {
 	}
 	fmt.Println(path) // for example /home/user
 	records := readCsvFile("./prepared_list.csv")
+	lock := sync.Mutex{}
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(records) - 1)
 	for i, record := range records[1:] {
@@ -362,13 +364,15 @@ func (app *App) dos() {
 				return
 			}
 			sendTimeDiff := realSendTime - sendTime
+			lock.Lock()
 			fout.WriteString(fmt.Sprintf("%s,%s,%f,%f,%f,%f,%d\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, rtt))
+			fout.Sync()
+			lock.Unlock()
 			fmt.Println(server, relay, rtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
 	log.Println("DOS finished, total: ", len(records)-1)
-	fout.Sync()
 	fout.Close()
 }
