@@ -335,11 +335,14 @@ func (app *App) dos() {
 	}
 	fmt.Println(path) // for example /home/user
 	records := readCsvFile("./prepared_list.csv")
+	wg := sync.WaitGroup{}
+	wg.Add(len(records) - 1)
 	for i, record := range records[1:] {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
 
 		go func(record []string, index int) {
+			defer wg.Done()
 			server := record[0]
 			relay := record[1]
 			sendTime, _ := strconv.ParseFloat(record[2], 64)
@@ -364,5 +367,8 @@ func (app *App) dos() {
 			fmt.Println(server, relay, rtt, resp.Answer)
 		}(recordCopy, i)
 	}
+	wg.Wait()
+	log.Println("DOS finished, total: ", len(records)-1)
+	fout.Sync()
 	fout.Close()
 }
