@@ -21,3 +21,6 @@ contrib/msi/*.wixobj
 /dnscrypt.exe
 /prepared_list.csv
 /send_result.csv
+/dnscrypt-proxy/*.md
+/dnscrypt-proxy/*.md.minisig
+/dnscrypt-proxy/*.log
