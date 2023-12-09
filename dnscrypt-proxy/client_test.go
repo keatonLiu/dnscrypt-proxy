@@ -24,7 +24,9 @@ func TestLoadCsv(t *testing.T) {
 		relay := record[1]
 		sendTime, _ := strconv.ParseFloat(record[2], 64)
 		arrivalTime, _ := strconv.ParseFloat(record[3], 64)
-		fmt.Println(server, relay, sendTime, arrivalTime)
+		rtt, _ := strconv.ParseFloat(record[4], 64)
+		variation, _ := strconv.ParseFloat(record[5], 64)
+		fmt.Println(server, relay, sendTime, arrivalTime, rtt, variation)
 	}
 
 }

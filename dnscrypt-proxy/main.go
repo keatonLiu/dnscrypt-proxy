@@ -339,10 +339,12 @@ func (t *DosTimer) Now() float64 {
 
 func (app *App) dos() {
 	// load prepared list
-	fout, err := os.OpenFile("send_result.csv", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fout, err := os.OpenFile("send_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Fatal("Unable to read input file ", err)
 	}
+	fout.WriteString("server,relay,sendTime,realSendTime,sendTimeDiff,arrivalTime,realRtt,rtt,variation\n")
+
 	path, err := os.Getwd()
 	if err != nil {
 		log.Println(err)
