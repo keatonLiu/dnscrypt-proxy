@@ -20,3 +20,4 @@ contrib/msi/*.wixobj
 /dnscrypt
 /dnscrypt.exe
 /prepared_list.csv
+/send_result.csv
