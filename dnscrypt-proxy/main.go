@@ -339,7 +339,8 @@ func (app *App) dos() {
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(records) - 1)
-	startTime := float64(time.Now().UnixNano()) / 1e6
+	// StartTime + offset(delay)
+	startTime := float64(time.Now().UnixNano())/1e6 + 100
 	for i, record := range records[1:] {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
@@ -349,13 +350,16 @@ func (app *App) dos() {
 			server := record[0]
 			relay := record[1]
 			sendTime, _ := strconv.ParseFloat(record[2], 64)
-			timeNow := float64(time.Now().UnixNano()) / 1e6
-			if sendTime > timeNow {
-				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
-			}
 			arrivalTime, _ := strconv.ParseFloat(record[3], 64)
 			domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
 			q.SetQuestion(dns.Fqdn(domain), dns.TypeA)
+
+			// Sleep until sendTime
+			timeNow := float64(time.Now().UnixNano())/1e6 - startTime
+			if sendTime > timeNow {
+				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
+			}
+
 			realSendTime := float64(time.Now().UnixNano())/1e6 - startTime
 			resp, rtt, err := app.proxy.ResolveQuery(
 				"udp", "tcp", server,
