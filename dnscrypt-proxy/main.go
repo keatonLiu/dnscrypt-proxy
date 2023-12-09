@@ -321,6 +321,22 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
+type DosTimer struct {
+	StartTime float64
+	Offset    float64
+}
+
+func newDosTimer() *DosTimer {
+	return &DosTimer{
+		StartTime: float64(time.Now().UnixNano()) / 1e6,
+		Offset:    -100,
+	}
+}
+
+func (t *DosTimer) Now() float64 {
+	return float64(time.Now().UnixNano())/1e6 - t.StartTime + t.Offset
+}
+
 func (app *App) dos() {
 	// load prepared list
 	// make a query for server-relay-randomStr-index.test.xxt.asia
@@ -340,7 +356,7 @@ func (app *App) dos() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(records) - 1)
 	// StartTime + offset(delay)
-	startTime := float64(time.Now().UnixNano())/1e6 + 100
+	timer := newDosTimer()
 	for i, record := range records[1:] {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
@@ -355,12 +371,12 @@ func (app *App) dos() {
 			q.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 
 			// Sleep until sendTime
-			timeNow := float64(time.Now().UnixNano())/1e6 - startTime
+			timeNow := timer.Now()
 			if sendTime > timeNow {
 				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
 			}
 
-			realSendTime := float64(time.Now().UnixNano())/1e6 - startTime
+			realSendTime := timer.Now()
 			resp, rtt, err := app.proxy.ResolveQuery(
 				"udp", "tcp", server,
 				relay, q)
