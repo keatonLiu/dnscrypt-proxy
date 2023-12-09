@@ -366,6 +366,8 @@ func (app *App) dos() {
 			relay := record[1]
 			sendTime, _ := strconv.ParseFloat(record[2], 64)
 			arrivalTime, _ := strconv.ParseFloat(record[3], 64)
+			rtt, _ := strconv.ParseFloat(record[4], 64)
+			variation, _ := strconv.ParseFloat(record[5], 64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
@@ -379,7 +381,7 @@ func (app *App) dos() {
 			}
 
 			realSendTime := timer.Now()
-			resp, rtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+			resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 			if err != nil {
 				dlog.Warn(err)
 				return
@@ -388,12 +390,12 @@ func (app *App) dos() {
 
 			// write send result to file
 			lock.Lock()
-			fout.WriteString(fmt.Sprintf("%s,%s,%f,%f,%f,%f,%d\n",
-				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, rtt))
+			fout.WriteString(fmt.Sprintf("%s,%s,%.2f,%.2f,%.2f,%.2f,%d,%.2f,%.2f\n",
+				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
 			lock.Unlock()
 
-			fmt.Println(server, relay, rtt, resp.Answer)
+			fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
