@@ -1020,7 +1020,6 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 	}
 
 	if serverInfo == nil {
-		dlog.Warnf("Server [%s] not found", serverName)
 		err = fmt.Errorf("server [%s] not found", serverName)
 		return
 	}

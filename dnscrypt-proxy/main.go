@@ -510,9 +510,11 @@ func (app *App) probe() {
 					// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 					domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), reqSeq)
 					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
-
+					start := time.Now()
 					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
-					dlog.Debugf("Current progress: %d/%d, %s-%s", index+1, iterTime*groupSize, server, relay)
+					elapsed := time.Since(start)
+					dlog.Debugf("Current progress: %d/%d, %s-%s, elapsed: %dms",
+						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds())
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 						return
