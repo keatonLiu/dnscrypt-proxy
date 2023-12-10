@@ -344,7 +344,8 @@ func (app *App) dos() {
 	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(len(records))
-	count := 0
+	totalCount := 0
+	successCount := 0
 
 	// get the minimum sendTime
 	minSendTime := int64(0)
@@ -368,6 +369,12 @@ func (app *App) dos() {
 
 		go func(record []string, index int) {
 			defer wg.Done()
+			// Increase totalCount
+			lock.Lock()
+			totalCount++
+			log.Println("Current progress: ", totalCount, "/", len(records))
+			lock.Unlock()
+
 			server := record[0]
 			relay := record[1]
 			sendTime, _ := strconv.ParseInt(record[2], 10, 64)
@@ -401,16 +408,15 @@ func (app *App) dos() {
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
-			// Increase count
-			count++
-			log.Println("Current progress: ", count, "/", len(records))
-			lock.Unlock()
+			successCount++
 			log.Println("unlock")
+			lock.Unlock()
 
 			//fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
-	log.Println("DOS finished, total: ", len(records))
+	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount, len(records),
+		successCount, float64(successCount)/float64(totalCount))
 	fout.Close()
 }
