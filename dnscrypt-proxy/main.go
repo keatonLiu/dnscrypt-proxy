@@ -501,8 +501,8 @@ func (app *App) probe() {
 			server := srList[index].Server
 			relay := srList[index].Relay
 
-			for k := 0; k < 10; k++ {
-				go func(server string, relay string, reqSeq int) {
+			go func(server string, relay string) {
+				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					defer wg.Done()
 
 					// TODO: send query
@@ -526,8 +526,8 @@ func (app *App) probe() {
 					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
 					fout.Sync()
 					lock.Unlock()
-				}(server, relay, k)
-			}
+				}
+			}(server, relay)
 		}
 		wg.Wait()
 		//log.Printf("Current progress: %d/%d", i+1, iterTime)
