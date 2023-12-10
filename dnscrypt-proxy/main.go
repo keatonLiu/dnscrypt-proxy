@@ -509,6 +509,7 @@ func (app *App) probe() {
 				domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
 				q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
+				log.Printf("Current progress: %d/%d, %s-%s", index+1, iterTime, server, relay)
 				resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 				if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 					return
@@ -525,5 +526,6 @@ func (app *App) probe() {
 			}()
 		}
 		wg.Wait()
+		//log.Printf("Current progress: %d/%d", i+1, iterTime)
 	}
 }
