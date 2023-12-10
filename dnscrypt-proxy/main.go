@@ -178,6 +178,13 @@ func main() {
 			})
 		})
 
+		r.GET("/probe", func(c *gin.Context) {
+			app.probe()
+			c.JSON(http.StatusOK, gin.H{
+				"msg": "ok",
+			})
+		})
+
 		r.Run(":8080")
 		dlog.Noticef("API Server started at %s", ":8080")
 	}()
@@ -344,14 +351,13 @@ func (app *App) dos() {
 	}
 	fout.WriteString("server,relay,sendTime,realSendTime,sendTimeDiff,arrivalTime,realRtt,rtt,variation\n")
 
-	path, err := os.Getwd()
-	if err != nil {
-		log.Println(err)
-	}
+	path, _ := os.Getwd()
 	fmt.Println("Prepared list: " + path) // for example /home/user
+
 	records := readCsvFile("./prepared_list.csv")[1:]
 	fmt.Println("Prepared list length: ", len(records))
 
+	// start dos
 	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(len(records))
@@ -434,4 +440,47 @@ func (app *App) dos() {
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount, len(records),
 		successCount, float64(successCount)/float64(totalCount))
 	fout.Close()
+}
+
+func GCD(a, b int) int {
+	for b != 0 {
+		t := b
+		b = a % b
+		a = t
+	}
+	return a
+}
+
+type SRPair struct {
+	Server string
+	Relay  string
+}
+
+func (app *App) probe() {
+	// Iterate through all servers and relays
+	servers := app.proxy.serversInfo.inner
+	relays := app.proxy.registeredRelays
+	k := GCD(len(servers), len(relays))
+
+	srList := make([]SRPair, 0)
+
+	for start := 0; start < k; start++ {
+		i, j := 0, start
+		for {
+			srList = append(srList, SRPair{
+				Server: servers[i].Name,
+				Relay:  relays[j].getName(),
+			})
+
+			i = (i + 1) % len(servers)
+			j = (j + 1) % len(relays)
+
+			if i == 0 || j == start {
+				break
+			}
+		}
+	}
+
+	log.Println(srList)
+	log.Printf("Total %d pairs", len(srList))
 }

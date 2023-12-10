@@ -56,6 +56,10 @@ func (registeredServer *RegisteredServer) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (registeredServer *RegisteredServer) getName() string {
+	return registeredServer.name
+}
+
 type ServerBugs struct {
 	fragmentsBlocked bool
 }
