@@ -482,7 +482,7 @@ func (app *App) probe() {
 	}
 
 	//log.Println(srList)
-	log.Printf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
+	dlog.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
 
 	fout, err := os.OpenFile("probe_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -498,32 +498,36 @@ func (app *App) probe() {
 		wg.Add(groupSize)
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
+			server := srList[index].Server
+			relay := srList[index].Relay
 
-			go func() {
-				defer wg.Done()
-				server := srList[index].Server
-				relay := srList[index].Relay
-				// TODO: send query
-				q := new(dns.Msg)
-				// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-				domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
-				q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
+			for k := 0; k < 10; k++ {
+				go func(server string, relay string, reqSeq int) {
+					defer wg.Done()
 
-				log.Printf("Current progress: %d/%d, %s-%s", index+1, iterTime, server, relay)
-				resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
-				if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
-					return
-				}
-				txtData := resp.Answer[0].(*dns.TXT).Txt[0]
-				txtJson := &ResolveResponseTXTBody{}
-				json.Unmarshal([]byte(txtData), txtJson)
-				realArrivalTime := txtJson.RecvTime
+					// TODO: send query
+					q := new(dns.Msg)
+					// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
+					domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), reqSeq)
+					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
-				lock.Lock()
-				fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
-				fout.Sync()
-				lock.Unlock()
-			}()
+					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+					dlog.Debugf("Current progress: %d/%d, %s-%s", index+1, iterTime*groupSize, server, relay)
+
+					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
+						return
+					}
+					txtData := resp.Answer[0].(*dns.TXT).Txt[0]
+					txtJson := &ResolveResponseTXTBody{}
+					json.Unmarshal([]byte(txtData), txtJson)
+					realArrivalTime := txtJson.RecvTime
+
+					lock.Lock()
+					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
+					fout.Sync()
+					lock.Unlock()
+				}(server, relay, k)
+			}
 		}
 		wg.Wait()
 		//log.Printf("Current progress: %d/%d", i+1, iterTime)
