@@ -483,4 +483,44 @@ func (app *App) probe() {
 
 	//log.Println(srList)
 	log.Printf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
+
+	fout, err := os.OpenFile("probe_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Fatal("Unable to read input file ", err)
+		return
+	}
+	lock := sync.Mutex{}
+
+	groupSize := min(len(servers), len(relays))
+	iterTime := max(len(servers), len(relays))
+	for i := 0; i < iterTime; i++ {
+		wg := sync.WaitGroup{}
+		wg.Add(groupSize)
+		for j := 0; j < groupSize; j++ {
+			index := i*groupSize + j
+
+			go func() {
+				defer wg.Done()
+				server := srList[index].Server
+				relay := srList[index].Relay
+				// TODO: send query
+				q := new(dns.Msg)
+				// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
+				domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
+				q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
+
+				resp, realRtt, _ := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+				txtData := resp.Answer[0].(*dns.TXT).Txt[0]
+				txtJson := &ResolveResponseTXTBody{}
+				json.Unmarshal([]byte(txtData), txtJson)
+				realArrivalTime := txtJson.RecvTime
+
+				lock.Lock()
+				fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
+				fout.Sync()
+				lock.Unlock()
+			}()
+		}
+		wg.Wait()
+	}
 }
