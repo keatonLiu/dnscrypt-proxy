@@ -475,12 +475,12 @@ func (app *App) probe() {
 			i = (i + 1) % len(servers)
 			j = (j + 1) % len(relays)
 
-			if i == 0 || j == start {
+			if i == 0 && j == start {
 				break
 			}
 		}
 	}
 
-	log.Println(srList)
-	log.Printf("Total %d pairs", len(srList))
+	//log.Println(srList)
+	log.Printf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
 }
