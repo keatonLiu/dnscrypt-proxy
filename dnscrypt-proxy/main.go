@@ -510,7 +510,7 @@ func (app *App) probe() {
 				q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
 				resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
-				if len(resp.Answer) == 0 || realRtt == 0 || err != nil {
+				if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 					return
 				}
 				txtData := resp.Answer[0].(*dns.TXT).Txt[0]
