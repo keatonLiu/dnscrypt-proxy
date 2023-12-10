@@ -380,7 +380,7 @@ func (app *App) dos() {
 
 			// write send result to file
 			lock.Lock()
-			fout.WriteString(fmt.Sprintf("%s,%s,%.2f,%.2f,%.2f,%.2f,%d,%.2f,%.2f\n",
+			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
 			lock.Unlock()
