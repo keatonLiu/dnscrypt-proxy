@@ -1,5 +1,15 @@
+#!/bin/bash
+
 export GOOS=linux
 echo "Building for $GOOS"
-go build -o dnscrypt ./dnscrypt-proxy
-echo "Running dnscrypt"
-./dnscrypt --config ./dnscrypt-proxy.toml
+
+# 尝试进行编译
+if go build -o dnscrypt ./dnscrypt-proxy; then
+    echo "Build successful"
+    echo "Running dnscrypt"
+    sudo ./dnscrypt --config ./dnscrypt-proxy.toml
+else
+    # 如果编译失败，打印错误信息并退出
+    echo "Build failed"
+    exit 1
+fi

@@ -321,20 +321,8 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-type DosTimer struct {
-	StartTime float64
-	Offset    float64
-}
-
-func newDosTimer() *DosTimer {
-	return &DosTimer{
-		StartTime: float64(time.Now().UnixNano()) / 1e6,
-		Offset:    -100,
-	}
-}
-
-func (t *DosTimer) Now() float64 {
-	return float64(time.Now().UnixNano())/1e6 - t.StartTime + t.Offset
+func NowUnixMillion() int64 {
+	return timeNow().UnixMilli()
 }
 
 func (app *App) dos() {
@@ -357,7 +345,7 @@ func (app *App) dos() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(records) - 1)
 	// StartTime + offset(delay)
-	timer := newDosTimer()
+
 	for i, record := range records[1:] {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
@@ -366,8 +354,8 @@ func (app *App) dos() {
 			defer wg.Done()
 			server := record[0]
 			relay := record[1]
-			sendTime, _ := strconv.ParseFloat(record[2], 64)
-			arrivalTime, _ := strconv.ParseFloat(record[3], 64)
+			sendTime, _ := strconv.ParseInt(record[2], 10, 64)
+			arrivalTime, _ := strconv.ParseInt(record[3], 10, 64)
 			rtt, _ := strconv.ParseFloat(record[4], 64)
 			variation, _ := strconv.ParseFloat(record[5], 64)
 
@@ -377,12 +365,12 @@ func (app *App) dos() {
 			q.SetQuestion(dns.Fqdn(domain), dns.TypeA)
 
 			// Sleep until sendTime
-			timeNow := timer.Now()
+			timeNow := NowUnixMillion()
 			if sendTime > timeNow {
 				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
 			}
 
-			realSendTime := timer.Now()
+			realSendTime := NowUnixMillion()
 			resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 			if err != nil {
 				dlog.Warn(err)
