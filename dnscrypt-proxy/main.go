@@ -369,11 +369,6 @@ func (app *App) dos() {
 
 		go func(record []string, index int) {
 			defer wg.Done()
-			// Increase totalCount
-			lock.Lock()
-			totalCount++
-			log.Println("Current progress: ", totalCount, "/", len(records))
-			lock.Unlock()
 
 			server := record[0]
 			relay := record[1]
@@ -396,6 +391,12 @@ func (app *App) dos() {
 
 			realSendTime := NowUnixMillion()
 			_, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+
+			// Increase totalCount
+			lock.Lock()
+			totalCount++
+			lock.Unlock()
+
 			if err != nil {
 				//dlog.Warn(err)
 				return
@@ -404,12 +405,11 @@ func (app *App) dos() {
 
 			// write send result to file
 			lock.Lock()
-			log.Println("lock")
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
 			successCount++
-			log.Println("unlock")
+			//log.Println("Current progress: ", totalCount, "/", len(records))
 			lock.Unlock()
 
 			//fmt.Println(server, relay, realRtt, resp.Answer)
