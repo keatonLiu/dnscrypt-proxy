@@ -651,10 +651,10 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	}
 	var err error
 	var pc net.Conn
-	pc.SetDeadline(time.Now().Add(serverInfo.Timeout))
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialTCP("tcp", nil, upstreamAddr)
+		defaultDialer := net.Dialer{Timeout: serverInfo.Timeout}
+		pc, err = defaultDialer.Dial("tcp", upstreamAddr.String())
 	} else {
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}
