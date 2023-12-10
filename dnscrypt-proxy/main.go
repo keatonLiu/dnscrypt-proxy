@@ -5,6 +5,7 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"encoding/csv"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -153,7 +154,11 @@ func main() {
 			}
 
 			q := new(dns.Msg)
-			q.SetQuestion(dns.Fqdn(req.Name), dns.TypeA)
+			qtype, exists := dns.StringToType[strings.ToUpper(req.QType)]
+			if !exists {
+				qtype = dns.TypeA
+			}
+			q.SetQuestion(dns.Fqdn(req.Name), qtype)
 
 			resp, rtt, err := app.proxy.ResolveQuery(
 				"udp", req.ServerProtocol, req.Server,
@@ -293,6 +298,12 @@ type ResolveRequestBody struct {
 	Server         string `json:"server"`
 	RelayName      string `json:"relayName"`
 	ServerProtocol string `json:"serverProtocol"`
+	QType          string `json:"qType"`
+}
+
+type ResolveResponseTXTBody struct {
+	RecvTime int64  `json:"sendTime"`
+	RecvIp   string `json:"recvIp"`
 }
 
 func readCsvFile(filePath string) [][]string {
@@ -380,7 +391,7 @@ func (app *App) dos() {
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
 			q := new(dns.Msg)
-			q.SetQuestion(dns.Fqdn(domain), dns.TypeA)
+			q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
@@ -390,7 +401,7 @@ func (app *App) dos() {
 			}
 
 			realSendTime := NowUnixMillion()
-			_, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+			resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 
 			// Increase totalCount
 			lock.Lock()
@@ -402,11 +413,15 @@ func (app *App) dos() {
 				return
 			}
 			sendTimeDiff := realSendTime - sendTime
+			txtData := resp.Extra[0].(*dns.TXT).Txt[0]
+			txtJson := &ResolveResponseTXTBody{}
+			json.Unmarshal([]byte(txtData), txtJson)
+			realArrivalTime := txtJson.RecvTime
 
 			// write send result to file
 			lock.Lock()
-			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
-				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
+			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%d,%.2f,%.2f\n",
+				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realArrivalTime, realRtt, rtt, variation))
 			fout.Sync()
 			successCount++
 			//log.Println("Current progress: ", totalCount, "/", len(records))
