@@ -509,7 +509,10 @@ func (app *App) probe() {
 				domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
 				q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
-				resp, realRtt, _ := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+				resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+				if len(resp.Answer) == 0 || realRtt == 0 || err != nil {
+					return
+				}
 				txtData := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtJson := &ResolveResponseTXTBody{}
 				json.Unmarshal([]byte(txtData), txtJson)
