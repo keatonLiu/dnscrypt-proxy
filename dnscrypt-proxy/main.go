@@ -338,15 +338,16 @@ func (app *App) dos() {
 		log.Println(err)
 	}
 	fmt.Println("Prepared list: " + path) // for example /home/user
-	records := readCsvFile("./prepared_list.csv")
-	fmt.Println("Prepared list length: ", len(records)-1)
+	records := readCsvFile("./prepared_list.csv")[1:]
+	fmt.Println("Prepared list length: ", len(records))
 
 	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	wg.Add(len(records) - 1)
+	wg.Add(len(records))
+	count := 0
 	// StartTime + offset(delay)
 
-	for i, record := range records[1:] {
+	for i, record := range records {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
 
@@ -371,9 +372,9 @@ func (app *App) dos() {
 			}
 
 			realSendTime := NowUnixMillion()
-			resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+			_, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 			if err != nil {
-				dlog.Warn(err)
+				//dlog.Warn(err)
 				return
 			}
 			sendTimeDiff := realSendTime - sendTime
@@ -383,12 +384,15 @@ func (app *App) dos() {
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
+			// Increase count
+			count++
+			log.Println("Current progress: ", count, "/", len(records))
 			lock.Unlock()
 
-			fmt.Println(server, relay, realRtt, resp.Answer)
+			//fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
-	log.Println("DOS finished, total: ", len(records)-1)
+	log.Println("DOS finished, total: ", len(records))
 	fout.Close()
 }
