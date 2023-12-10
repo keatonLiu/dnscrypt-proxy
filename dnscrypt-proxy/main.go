@@ -503,18 +503,20 @@ func (app *App) probe() {
 
 			go func(server string, relay string) {
 				defer wg.Done()
-
+				start := time.Now()
+				defer func() {
+					elapsed := time.Since(start)
+					dlog.Debugf("Current progress: %d/%d, %s-%s, elapsed: %dms",
+						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds())
+				}()
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// TODO: send query
 					q := new(dns.Msg)
 					// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 					domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), reqSeq)
 					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
-					start := time.Now()
+
 					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
-					elapsed := time.Since(start)
-					dlog.Debugf("Current progress: %d/%d, %s-%s, elapsed: %dms",
-						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds())
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 						return
