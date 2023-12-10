@@ -345,7 +345,22 @@ func (app *App) dos() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(records))
 	count := 0
-	// StartTime + offset(delay)
+
+	// get the minimum sendTime
+	minSendTime := int64(0)
+	for _, record := range records {
+		sendTime, _ := strconv.ParseInt(record[2], 10, 64)
+		if minSendTime == 0 || sendTime < minSendTime {
+			minSendTime = sendTime
+		}
+	}
+	// adjust sendTime
+	for _, record := range records {
+		sendTime, _ := strconv.ParseInt(record[2], 10, 64)
+		// 1000ms delay before first send
+		sendTime = sendTime - minSendTime + NowUnixMillion() + 1000
+		record[2] = strconv.FormatInt(sendTime, 10)
+	}
 
 	for i, record := range records {
 		recordCopy := make([]string, len(record))
@@ -368,6 +383,7 @@ func (app *App) dos() {
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
 			if sendTime > timeNow {
+				log.Println("Sleep time: ", sendTime-timeNow, "ms")
 				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
 			}
 
@@ -381,6 +397,7 @@ func (app *App) dos() {
 
 			// write send result to file
 			lock.Lock()
+			log.Println("lock")
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realRtt, rtt, variation))
 			fout.Sync()
@@ -388,6 +405,7 @@ func (app *App) dos() {
 			count++
 			log.Println("Current progress: ", count, "/", len(records))
 			lock.Unlock()
+			log.Println("unlock")
 
 			//fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)

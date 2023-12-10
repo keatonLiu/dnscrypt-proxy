@@ -1052,8 +1052,7 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 	serverInfo.Relay = backupRelay
 
 	if err != nil {
-		dlog.Errorf("Unable to resolve query: %v", err)
-		dlog.Errorf("%v", resp)
+		dlog.Errorf("Unable to resolve query: %v, resp: %v", err, resp)
 		return resp, rtt, err
 	}
 	resp = &dns.Msg{}
