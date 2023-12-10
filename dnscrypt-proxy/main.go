@@ -502,9 +502,9 @@ func (app *App) probe() {
 			relay := srList[index].Relay
 
 			go func(server string, relay string) {
-				for reqSeq := 0; reqSeq < 10; reqSeq++ {
-					defer wg.Done()
+				defer wg.Done()
 
+				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// TODO: send query
 					q := new(dns.Msg)
 					// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
