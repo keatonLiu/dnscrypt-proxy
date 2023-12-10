@@ -519,6 +519,7 @@ func (app *App) probe() {
 					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
+						dlog.Warnf("Probe failed: %s-%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						return
 					}
 					txtData := resp.Answer[0].(*dns.TXT).Txt[0]
