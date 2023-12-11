@@ -493,7 +493,10 @@ func (app *App) probe(limit int) {
 		log.Fatal("Unable to read input file ", err)
 		return
 	}
-	defer fout.Close()
+	defer func() {
+		fout.Close()
+		log.Println("Probe finished")
+	}()
 
 	fout.WriteString("server,relay,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
@@ -502,7 +505,9 @@ func (app *App) probe(limit int) {
 	iterTime := max(len(servers), len(relays))
 	for i := 0; i < iterTime; i++ {
 		wg := sync.WaitGroup{}
-		wg.Add(groupSize)
+		if limit > 0 {
+			wg.Add(min(groupSize, limit-i*groupSize))
+		}
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
 			server := srList[index].Server
@@ -546,12 +551,11 @@ func (app *App) probe(limit int) {
 			}(server, relay)
 
 			if limit > 0 && index+1 >= limit {
-				return
+				break
 			}
 		}
 		wg.Wait()
 		log.Printf("Batch probe process: %d/%d", i+1, iterTime)
 		//break
 	}
-	log.Println("Probe finished")
 }
