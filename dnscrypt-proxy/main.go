@@ -401,9 +401,7 @@ func (app *App) dos() {
 			variation, _ := strconv.ParseFloat(record[5], 64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-			domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
-			q := new(dns.Msg)
-			q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
+			q := app.buildQuery(server, relay, index, dns.TypeTXT)
 
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
@@ -424,12 +422,20 @@ func (app *App) dos() {
 				dlog.Warn(err)
 				return
 			}
-			sendTimeDiff := realSendTime - sendTime
-			txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
-			txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
-			txtJson := &ResolveResponseTXTBody{}
-			json.Unmarshal(txtData, txtJson)
-			realArrivalTime := txtJson.RecvTime
+
+			var realArrivalTime int64
+			var sendTimeDiff int64
+			if q.Question[0].Qtype != dns.TypeTXT {
+				realArrivalTime = 0
+				sendTimeDiff = 0
+			} else {
+				sendTimeDiff = realSendTime - sendTime
+				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
+				txtJson := &ResolveResponseTXTBody{}
+				json.Unmarshal(txtData, txtJson)
+				realArrivalTime = txtJson.RecvTime
+			}
 
 			// write send result to file
 			lock.Lock()
@@ -447,6 +453,13 @@ func (app *App) dos() {
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount, len(records),
 		successCount, float64(successCount)/float64(totalCount))
 	fout.Close()
+}
+
+func (app *App) buildQuery(server string, relay string, index int, qtype uint16) *dns.Msg {
+	domain := fmt.Sprintf("%s,%s.%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
+	q := new(dns.Msg)
+	q.SetQuestion(dns.Fqdn(domain), qtype)
+	return q
 }
 
 func GCD(a, b int) int {
@@ -527,13 +540,9 @@ func (app *App) probe(limit int) {
 						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds()/10)
 				}()
 
-				randStr := RandStringRunes(8)
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// Send query
-					q := new(dns.Msg)
-					// make a query for {server},{relay}-{#randomStr}-{index}.test.xxt.asia
-					domain := fmt.Sprintf("%s-%s,%s-%d.test.xxt.asia", server, relay, randStr, reqSeq)
-					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
+					q := app.buildQuery(server, relay, reqSeq, dns.TypeTXT)
 
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 
