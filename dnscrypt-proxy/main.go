@@ -174,7 +174,12 @@ func main() {
 		})
 
 		r.POST("/dos", func(c *gin.Context) {
-			app.dos()
+			qtypeStr, _ := c.GetQuery("qtype")
+			qtype, exists := dns.StringToType[strings.ToUpper(qtypeStr)]
+			if !exists {
+				qtype = dns.TypeA
+			}
+			app.dos(qtype)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -276,7 +281,8 @@ func main() {
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
-				app.dos()
+				qtype := args[0]
+				app.dos(dns.StringToType[qtype])
 			}
 		}
 	}()
@@ -371,7 +377,7 @@ func NowUnixMillion() int64 {
 	return timeNow().UnixMilli()
 }
 
-func (app *App) dos() {
+func (app *App) dos(qtype uint16) {
 	// load prepared list
 	fout, err := os.OpenFile("send_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -423,7 +429,7 @@ func (app *App) dos() {
 			variation, _ := strconv.ParseFloat(record[5], 64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-			q := app.buildQuery(server, relay, index, dns.TypeTXT)
+			q := app.buildQuery(server, relay, index, qtype)
 
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
