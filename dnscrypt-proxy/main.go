@@ -464,7 +464,6 @@ func (app *App) dos() {
 			lock.Lock()
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realArrivalTime, realRtt, rtt, variation))
-			fout.Sync()
 			//log.Println("Current progress: ", totalCount, "/", len(records))
 			lock.Unlock()
 
@@ -593,7 +592,6 @@ func (app *App) probe(limit int) {
 
 					lock.Lock()
 					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
-					fout.Sync()
 					lock.Unlock()
 				}
 			}(server, relay)
