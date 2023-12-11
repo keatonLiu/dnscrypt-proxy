@@ -185,7 +185,7 @@ func main() {
 			if err != nil {
 				limitInt = -1
 			}
-			app.probe(limitInt)
+			go app.probe(limitInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -501,6 +501,8 @@ func (app *App) probe(limit int) {
 	fout.WriteString("server,relay,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
+	failTimes := 0
+	maxFailTimes := 5
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
 	for i := 0; i < iterTime; i++ {
@@ -534,8 +536,15 @@ func (app *App) probe(limit int) {
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
-						continue
+						failTimes += 1
+						if failTimes > maxFailTimes {
+							break
+						} else {
+							reqSeq--
+							continue
+						}
 					}
+					failTimes = 0
 
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
