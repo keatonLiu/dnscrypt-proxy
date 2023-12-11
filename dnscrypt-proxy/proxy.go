@@ -544,7 +544,7 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialUDP("udp", nil, upstreamAddr)
+		pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
 	} else {
 		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
 	}
@@ -615,11 +615,12 @@ func (proxy *Proxy) exchangeWithUDPServerOnce(
 		proxy.prepareForRelay(serverInfo.UDPAddr.IP, serverInfo.UDPAddr.Port, &encryptedQuery)
 	}
 	encryptedResponse := make([]byte, MaxDNSPacketSize)
-	relayStr := "<nil>"
 	if serverInfo.Relay != nil {
-		relayStr = serverInfo.Relay.Dnscrypt.RelayUDPAddr.String()
+		relayAddr := serverInfo.Relay.Dnscrypt.RelayUDPAddr.String()
+		dlog.Noticef("Sending query to server: %s via relay: %s", serverInfo.Name, relayAddr)
+	} else {
+		dlog.Noticef("Sending query to server: %s directly", serverInfo.Name)
 	}
-	dlog.Noticef("Sending query to server: %s via relay: %s", serverInfo.Name, relayStr)
 
 	start := time.Now()
 	if _, err = pc.Write(encryptedQuery); err != nil {
