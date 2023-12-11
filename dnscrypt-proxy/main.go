@@ -418,14 +418,17 @@ func (app *App) dos() {
 			totalCount++
 			lock.Unlock()
 
-			if err != nil || len(resp.Answer) == 0 {
+			if err != nil {
 				dlog.Warn(err)
+				return
+			} else if len(resp.Answer) == 0 {
+				dlog.Warn("resp.Answer is empty")
 				return
 			}
 
 			var realArrivalTime int64
 			var sendTimeDiff int64
-			if q.Question[0].Qtype != dns.TypeTXT {
+			if q.Question[0].Qtype != dns.A {
 				realArrivalTime = 0
 				sendTimeDiff = 0
 			} else {
