@@ -551,7 +551,8 @@ func (app *App) probe(limit int) {
 			}(server, relay)
 
 			if limit > 0 && index+1 >= limit {
-				break
+				wg.Wait()
+				return
 			}
 		}
 		wg.Wait()
