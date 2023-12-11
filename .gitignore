@@ -24,3 +24,8 @@ contrib/msi/*.wixobj
 /dnscrypt-proxy/*.md
 /dnscrypt-proxy/*.md.minisig
 /dnscrypt-proxy/*.log
+probe_result.csv
+public-resolvers.md
+public-resolvers.md.minisig
+relays.md
+relays.md.minisig

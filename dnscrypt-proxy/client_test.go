@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"testing"
@@ -29,4 +30,14 @@ func TestLoadCsv(t *testing.T) {
 		fmt.Println(server, relay, sendTime, arrivalTime, rtt, variation)
 	}
 
+}
+
+func TestParseJson(t *testing.T) {
+	text := "{\"recvTime\": 1702262756258, \"recvIp\": \"149.28.101.119\"}"
+	var unquoted string
+	err := json.Unmarshal([]byte(text), &unquoted)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(unquoted)
 }

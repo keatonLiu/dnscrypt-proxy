@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	crypto_rand "crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/csv"
 	"encoding/json"
@@ -309,7 +310,7 @@ type ResolveRequestBody struct {
 }
 
 type ResolveResponseTXTBody struct {
-	RecvTime int64  `json:"sendTime"`
+	RecvTime int64  `json:"recvTime"`
 	RecvIp   string `json:"recvIp"`
 }
 
@@ -481,14 +482,13 @@ func (app *App) probe() {
 		}
 	}
 
-	//log.Println(srList)
 	dlog.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
-
 	fout, err := os.OpenFile("probe_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Fatal("Unable to read input file ", err)
 		return
 	}
+	fout.WriteString("server,relay,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
 	groupSize := min(len(servers), len(relays))
@@ -509,11 +509,13 @@ func (app *App) probe() {
 					dlog.Debugf("Current progress: %d/%d, %s-%s, elapsed: %dms",
 						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds())
 				}()
+
+				randStr := RandStringRunes(8)
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// TODO: send query
 					q := new(dns.Msg)
-					// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-					domain := fmt.Sprintf("%s-%s-%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), reqSeq)
+					// make a query for {server},{relay}-{#randomStr}-{index}.test.xxt.asia
+					domain := fmt.Sprintf("%s-%s,%s-%d.test.xxt.asia", server, relay, randStr, reqSeq)
 					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
 					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
@@ -522,9 +524,11 @@ func (app *App) probe() {
 						dlog.Warnf("Probe failed: %s-%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						return
 					}
-					txtData := resp.Answer[0].(*dns.TXT).Txt[0]
+
+					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
 					txtJson := &ResolveResponseTXTBody{}
-					json.Unmarshal([]byte(txtData), txtJson)
+					json.Unmarshal(txtData, txtJson)
 					realArrivalTime := txtJson.RecvTime
 
 					lock.Lock()
@@ -535,6 +539,8 @@ func (app *App) probe() {
 			}(server, relay)
 		}
 		wg.Wait()
-		//log.Printf("Current progress: %d/%d", i+1, iterTime)
+		log.Printf("Batch probe process: %d/%d", i+1, iterTime)
+		//break
 	}
+	fout.Close()
 }
