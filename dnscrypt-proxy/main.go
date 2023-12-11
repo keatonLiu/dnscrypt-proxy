@@ -529,7 +529,7 @@ func (app *App) probe(limit int) {
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
 						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
-						return
+						continue
 					}
 
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
@@ -545,7 +545,7 @@ func (app *App) probe(limit int) {
 				}
 			}(server, relay)
 
-			if limit > 0 && index >= limit {
+			if limit > 0 && index+1 >= limit {
 				return
 			}
 		}

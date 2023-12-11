@@ -1014,11 +1014,13 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 		return resp, rtt, err
 	}
 	var serverInfo *ServerInfo
+	proxy.serversInfo.RLock()
 	for _, serverInfo = range proxy.serversInfo.inner {
 		if serverInfo.Name == serverName {
 			break
 		}
 	}
+	proxy.serversInfo.RUnlock()
 
 	if serverInfo == nil {
 		err = fmt.Errorf("server [%s] not found", serverName)
