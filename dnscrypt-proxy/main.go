@@ -454,7 +454,7 @@ func (app *App) dos(qtype uint16) {
 
 			var realArrivalTime int64
 			var sendTimeDiff int64
-			if q.Question[0].Qtype != dns.TypeA {
+			if q.Question[0].Qtype == dns.TypeA {
 				realArrivalTime = 0
 				sendTimeDiff = 0
 			} else {
