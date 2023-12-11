@@ -180,7 +180,12 @@ func main() {
 		})
 
 		r.GET("/probe", func(c *gin.Context) {
-			app.probe()
+			limit, _ := c.GetQuery("limit")
+			limitInt, err := strconv.Atoi(limit)
+			if err != nil {
+				limitInt = -1
+			}
+			app.probe(limitInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -457,7 +462,7 @@ type SRPair struct {
 	Relay  string
 }
 
-func (app *App) probe() {
+func (app *App) probe(limit int) {
 	// Iterate through all servers and relays
 	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
@@ -488,6 +493,8 @@ func (app *App) probe() {
 		log.Fatal("Unable to read input file ", err)
 		return
 	}
+	defer fout.Close()
+
 	fout.WriteString("server,relay,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
@@ -537,10 +544,14 @@ func (app *App) probe() {
 					lock.Unlock()
 				}
 			}(server, relay)
+
+			if limit > 0 && index >= limit {
+				return
+			}
 		}
 		wg.Wait()
 		log.Printf("Batch probe process: %d/%d", i+1, iterTime)
 		//break
 	}
-	fout.Close()
+	log.Println("Probe finished")
 }
