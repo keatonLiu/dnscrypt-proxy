@@ -421,7 +421,7 @@ func (app *App) dos() {
 			lock.Unlock()
 
 			if err != nil || len(resp.Answer) == 0 {
-				//dlog.Warn(err)
+				dlog.Warn(err)
 				return
 			}
 			sendTimeDiff := realSendTime - sendTime

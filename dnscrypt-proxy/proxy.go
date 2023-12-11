@@ -1010,7 +1010,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 
 	queryBytes, err := query.Pack()
 	if err != nil {
-		dlog.Errorf("Unable to pack query: %v", err)
+		dlog.Errorf("Unable to pack query: %v, query: %v", err, query)
 		return resp, rtt, err
 	}
 	var serverInfo *ServerInfo
