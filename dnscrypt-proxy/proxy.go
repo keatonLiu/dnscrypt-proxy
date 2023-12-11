@@ -1005,7 +1005,7 @@ func (proxy *Proxy) ListAvailableRelays() {
 	}
 }
 
-func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverName string,
+func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 	relayName string, query *dns.Msg) (resp *dns.Msg, rtt int64, err error) {
 
 	queryBytes, err := query.Pack()
@@ -1014,13 +1014,7 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 		return resp, rtt, err
 	}
 	var serverInfo *ServerInfo
-	proxy.serversInfo.RLock()
-	for _, serverInfo = range proxy.serversInfo.inner {
-		if serverInfo.Name == serverName {
-			break
-		}
-	}
-	proxy.serversInfo.RUnlock()
+	serverInfo = proxy.getServerInfoByName(serverName)
 
 	if serverInfo == nil {
 		err = fmt.Errorf("server [%s] not found", serverName)
@@ -1059,4 +1053,16 @@ func (proxy *Proxy) ResolveQuery(clientProto string, serverProto string, serverN
 	resp.Unpack(response)
 	//fmt.Println(resp.String())
 	return resp, rtt, err
+}
+
+func (proxy *Proxy) getServerInfoByName(serverName string) *ServerInfo {
+	var serverInfo *ServerInfo
+	proxy.serversInfo.RLock()
+	for _, serverInfo = range proxy.serversInfo.inner {
+		if serverInfo.Name == serverName {
+			break
+		}
+	}
+	proxy.serversInfo.RUnlock()
+	return serverInfo
 }

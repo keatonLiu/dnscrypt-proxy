@@ -162,7 +162,7 @@ func main() {
 			q.SetQuestion(dns.Fqdn(req.Name), qtype)
 
 			resp, rtt, err := app.proxy.ResolveQuery(
-				"udp", req.ServerProtocol, req.Server,
+				req.ServerProtocol, req.Server,
 				req.RelayName, q)
 			c.JSON(http.StatusOK, gin.H{
 				"rtt":    rtt,
@@ -249,7 +249,7 @@ func main() {
 				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
 
 				res, rtt, _ := app.proxy.ResolveQuery(
-					"udp", "tcp", server,
+					"tcp", server,
 					relayName, q)
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
@@ -413,7 +413,7 @@ func (app *App) dos() {
 			}
 
 			realSendTime := NowUnixMillion()
-			resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 
 			// Increase totalCount
 			lock.Lock()
@@ -528,15 +528,15 @@ func (app *App) probe(limit int) {
 
 				randStr := RandStringRunes(8)
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
-					// TODO: send query
+					// Send query
 					q := new(dns.Msg)
 					// make a query for {server},{relay}-{#randomStr}-{index}.test.xxt.asia
 					domain := fmt.Sprintf("%s-%s,%s-%d.test.xxt.asia", server, relay, randStr, reqSeq)
 					q.SetQuestion(dns.Fqdn(domain), dns.TypeTXT)
 
-					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
+					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 
-					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
+					if err != nil || resp == nil {
 						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						failTimes += 1
 						if failTimes > maxFailTimes {
@@ -545,8 +545,12 @@ func (app *App) probe(limit int) {
 							reqSeq--
 							continue
 						}
+					} else if len(resp.Answer) == 0 {
+						dlog.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
+						break
+					} else {
+						failTimes = 0
 					}
-					failTimes = 0
 
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
