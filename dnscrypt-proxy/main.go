@@ -167,11 +167,11 @@ func main() {
 				req.ServerProtocol, req.Server,
 				req.RelayName, q)
 			c.JSON(http.StatusOK, gin.H{
-				"rtt":       rtt,
-				"server":    req,
-				"error":     err,
-				"data":      resp,
-				"send_time": sendTime,
+				"rtt":      rtt,
+				"server":   req,
+				"error":    err,
+				"data":     resp,
+				"sendTime": sendTime,
 			})
 		})
 
