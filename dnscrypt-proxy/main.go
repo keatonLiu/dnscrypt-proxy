@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -191,6 +192,23 @@ func main() {
 			})
 		})
 
+		r.GET("/rand-test", func(c *gin.Context) {
+			num, _ := c.GetQuery("num")
+			numInt, err := strconv.Atoi(num)
+			if err != nil {
+				numInt = 1
+			}
+			qtypeStr, _ := c.GetQuery("qtype")
+			qtype, exists := dns.StringToType[strings.ToUpper(qtypeStr)]
+			if !exists {
+				qtype = dns.TypeA
+			}
+			go app.randomQueryTest(numInt, qtype)
+			c.JSON(http.StatusOK, gin.H{
+				"msg": "ok",
+			})
+		})
+
 		r.Run(":8080")
 		dlog.Noticef("API Server started at %s", ":8080")
 	}()
@@ -248,9 +266,13 @@ func main() {
 				q := new(dns.Msg)
 				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
 
-				res, rtt, _ := app.proxy.ResolveQuery(
+				res, rtt, err := app.proxy.ResolveQuery(
 					"tcp", server,
 					relayName, q)
+				if err != nil {
+					dlog.Warn(err)
+					break
+				}
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
@@ -367,8 +389,8 @@ func (app *App) dos() {
 	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	wg.Add(len(records))
-	totalCount := 0
-	successCount := 0
+	var totalCount atomic.Uint64
+	var successCount atomic.Uint64
 
 	// get the minimum sendTime
 	minSendTime := int64(0)
@@ -414,9 +436,7 @@ func (app *App) dos() {
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 
 			// Increase totalCount
-			lock.Lock()
-			totalCount++
-			lock.Unlock()
+			totalCount.Add(1)
 
 			if err != nil {
 				dlog.Warn(err)
@@ -445,16 +465,16 @@ func (app *App) dos() {
 			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%d,%.2f,%.2f\n",
 				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realArrivalTime, realRtt, rtt, variation))
 			fout.Sync()
-			successCount++
 			//log.Println("Current progress: ", totalCount, "/", len(records))
 			lock.Unlock()
 
+			successCount.Add(1)
 			//fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
-	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount, len(records),
-		successCount, float64(successCount)/float64(totalCount))
+	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(records),
+		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
 	fout.Close()
 }
 
@@ -587,4 +607,43 @@ func (app *App) probe(limit int) {
 		log.Printf("Batch probe process: %d/%d", i+1, iterTime)
 		//break
 	}
+}
+
+func (app *App) randomQueryTest(num int, qtype uint16) {
+	wg := sync.WaitGroup{}
+	wg.Add(num)
+	for i := 0; i < num; i++ {
+		go func(index int) {
+			defer wg.Done()
+			// randomly select a server
+			server := app.proxy.serversInfo.inner[rand.Intn(len(app.proxy.serversInfo.inner))].Name
+			// randomly select a relay
+			relay := app.proxy.registeredRelays[rand.Intn(len(app.proxy.registeredRelays))].getName()
+			// build query
+			q := app.buildQuery(server, relay, index, qtype)
+			// send query
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
+			if err != nil {
+				dlog.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
+				return
+			}
+
+			if len(resp.Answer) == 0 {
+				dlog.Warn(fmt.Sprintf("server: %s, relay: %s, resp.Answer is empty", server, relay))
+				return
+			}
+
+			var realArrivalTime int64 = 0
+			if q.Question[0].Qtype == dns.TypeTXT {
+				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
+				txtJson := &ResolveResponseTXTBody{}
+				json.Unmarshal(txtData, txtJson)
+				realArrivalTime = txtJson.RecvTime
+			}
+
+			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realRtt: %d", server, relay, realArrivalTime, realRtt)
+		}(i)
+	}
+	wg.Wait()
 }
