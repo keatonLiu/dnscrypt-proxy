@@ -162,14 +162,16 @@ func main() {
 			}
 			q.SetQuestion(dns.Fqdn(req.Name), qtype)
 
+			sendTime := NowUnixMillion()
 			resp, rtt, err := app.proxy.ResolveQuery(
 				req.ServerProtocol, req.Server,
 				req.RelayName, q)
 			c.JSON(http.StatusOK, gin.H{
-				"rtt":    rtt,
-				"server": req,
-				"error":  err,
-				"data":   resp,
+				"rtt":       rtt,
+				"server":    req,
+				"error":     err,
+				"data":      resp,
+				"send_time": sendTime,
 			})
 		})
 
@@ -540,7 +542,7 @@ func (app *App) probe(limit int) {
 		log.Println("Probe finished")
 	}()
 
-	fout.WriteString("server,relay,realArrivalTime,realRtt\n")
+	fout.WriteString("server,relay,sendTime,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
 	failTimes := 0
@@ -572,6 +574,7 @@ func (app *App) probe(limit int) {
 					// Send query
 					q := app.buildQuery(server, relay, reqSeq, dns.TypeTXT)
 
+					sendTime := NowUnixMillion()
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 
 					if err != nil || resp == nil {
@@ -597,7 +600,7 @@ func (app *App) probe(limit int) {
 					realArrivalTime := txtJson.RecvTime
 
 					lock.Lock()
-					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d\n", server, relay, realArrivalTime, realRtt))
+					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d\n", server, relay, sendTime, realArrivalTime, realRtt))
 					lock.Unlock()
 				}
 			}(server, relay)
