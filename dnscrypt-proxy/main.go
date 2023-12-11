@@ -509,6 +509,8 @@ func (app *App) probe(limit int) {
 		wg := sync.WaitGroup{}
 		if limit > 0 {
 			wg.Add(min(groupSize, limit-i*groupSize))
+		} else {
+			wg.Add(groupSize)
 		}
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
