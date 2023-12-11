@@ -420,14 +420,15 @@ func (app *App) dos() {
 			totalCount++
 			lock.Unlock()
 
-			if err != nil {
+			if err != nil || len(resp.Answer) == 0 {
 				//dlog.Warn(err)
 				return
 			}
 			sendTimeDiff := realSendTime - sendTime
-			txtData := resp.Extra[0].(*dns.TXT).Txt[0]
+			txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+			txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
 			txtJson := &ResolveResponseTXTBody{}
-			json.Unmarshal([]byte(txtData), txtJson)
+			json.Unmarshal(txtData, txtJson)
 			realArrivalTime := txtJson.RecvTime
 
 			// write send result to file
