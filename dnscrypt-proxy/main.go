@@ -506,8 +506,8 @@ func (app *App) probe() {
 				start := time.Now()
 				defer func() {
 					elapsed := time.Since(start)
-					dlog.Debugf("Current progress: %d/%d, %s-%s, elapsed: %dms",
-						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds())
+					dlog.Debugf("Current progress: %d/%d, %s-%s, average time: %dms",
+						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds()/10)
 				}()
 
 				randStr := RandStringRunes(8)
@@ -521,7 +521,7 @@ func (app *App) probe() {
 					resp, realRtt, err := app.proxy.ResolveQuery("udp", "tcp", server, relay, q)
 
 					if err != nil || resp == nil || len(resp.Answer) == 0 || realRtt == 0 {
-						dlog.Warnf("Probe failed: %s-%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
+						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						return
 					}
 
