@@ -602,7 +602,7 @@ func (app *App) probe(limit int) {
 			}
 		}
 		wg.Wait()
-		log.Printf("Batch probe process: %d/%d", i+1, iterTime)
+		log.Printf("Batch probe process: %d/%d, failtimes: %d, totalTimes: %d", i+1, iterTime, failTimes, iterTime*groupSize)
 		//break
 	}
 }

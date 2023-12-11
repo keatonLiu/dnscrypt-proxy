@@ -1021,12 +1021,6 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 		return
 	}
 
-	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(serverInfo, queryBytes, serverProto)
-	if err != nil && serverProto == "udp" {
-		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
-		return resp, rtt, err
-	}
-
 	relay := proxy.GetRelayByName(relayName)
 	if relay == nil {
 		dlog.Warnf("Relay [%s] not found", relayName)
@@ -1035,6 +1029,12 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 
 	serverInfoCpy := *serverInfo
 	serverInfoCpy.Relay = relay
+
+	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(&serverInfoCpy, queryBytes, serverProto)
+	if err != nil && serverProto == "udp" {
+		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
+		return resp, rtt, err
+	}
 
 	var response []byte
 	if serverProto == "udp" {
