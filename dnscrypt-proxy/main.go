@@ -287,8 +287,15 @@ func main() {
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
-				qtype := args[0]
-				app.dos(dns.StringToType[qtype])
+				if len(args) == 0 {
+					app.dos(dns.TypeA)
+				} else {
+					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
+					if !exists {
+						qtype = dns.TypeA
+					}
+					app.dos(qtype)
+				}
 			}
 		}
 	}()
