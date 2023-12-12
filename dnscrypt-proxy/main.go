@@ -190,10 +190,14 @@ func main() {
 		r.GET("/probe", func(c *gin.Context) {
 			limit, _ := c.GetQuery("limit")
 			limitInt, err := strconv.Atoi(limit)
+			concurrentStr, _ := c.GetQuery("concurrent")
+			concurrentInt, err := strconv.Atoi(concurrentStr)
+
 			if err != nil {
 				limitInt = -1
+				concurrentInt = 3
 			}
-			go app.probe(limitInt)
+			go app.probe(limitInt, concurrentInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -506,7 +510,7 @@ type SRPair struct {
 	Relay  string
 }
 
-func (app *App) probe(limit int) {
+func (app *App) probe(limit int, maxConcurrent int) {
 	// Iterate through all servers and relays
 	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
@@ -545,24 +549,32 @@ func (app *App) probe(limit int) {
 	fout.WriteString("server,relay,sendTime,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
+	// Set max concurrent
+	countChannel := make(chan struct{}, maxConcurrent)
+	waitChannel := make(chan struct{})
+	defer func() {
+		<-waitChannel
+	}()
+
 	failTimes := 0
 	maxFailTimes := 5
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
 	for i := 0; i < iterTime; i++ {
-		wg := sync.WaitGroup{}
-		if limit > 0 {
-			wg.Add(min(groupSize, limit-i*groupSize))
-		} else {
-			wg.Add(groupSize)
-		}
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
 			server := srList[index].Server
 			relay := srList[index].Relay
 
 			go func(server string, relay string) {
-				defer wg.Done()
+				countChannel <- struct{}{}
+				defer func() {
+					<-countChannel
+					if len(countChannel) == 0 {
+						close(waitChannel)
+					}
+				}()
+
 				start := time.Now()
 				defer func() {
 					elapsed := time.Since(start)
@@ -605,14 +617,12 @@ func (app *App) probe(limit int) {
 				}
 			}(server, relay)
 
+			// Limit the number of probes
 			if limit > 0 && index+1 >= limit {
-				wg.Wait()
 				return
 			}
 		}
-		wg.Wait()
 		log.Printf("Batch probe process: %d/%d, failtimes: %d, totalTimes: %d", i+1, iterTime, failTimes, iterTime*groupSize)
-		//break
 	}
 }
 
@@ -641,15 +651,18 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			}
 
 			var realArrivalTime int64 = 0
+			var realResolverIp string = ""
 			if q.Question[0].Qtype == dns.TypeTXT {
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
 				json.Unmarshal(txtData, txtJson)
 				realArrivalTime = txtJson.RecvTime
+				realResolverIp = txtJson.RecvIp
 			}
 
-			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realRtt: %d", server, relay, realArrivalTime, realRtt)
+			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realResolverIp: %s, realRtt: %d",
+				server, relay, realArrivalTime, realResolverIp, realRtt)
 		}(i)
 	}
 	wg.Wait()
