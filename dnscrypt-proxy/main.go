@@ -396,7 +396,7 @@ func (app *App) dos(qtype uint16) {
 	if err != nil {
 		log.Fatal("Unable to read input file ", err)
 	}
-	fout.WriteString("server,relay,sendTime,realSendTime,sendTimeDiff,arrivalTime,realRtt,rtt,variation\n")
+	fout.WriteString("server,relay,sendTime,realSendTime,sendTimeDiff,arrivalTime,realArrivalTime,realRtt,rtt,variation\n")
 
 	path, _ := os.Getwd()
 	fmt.Println("Prepared list: " + path) // for example /home/user
