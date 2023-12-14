@@ -288,11 +288,11 @@ func main() {
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
 				if len(args) == 0 {
-					app.dos(dns.TypeA)
+					app.dos(dns.TypeTXT)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
-						qtype = dns.TypeA
+						qtype = dns.TypeTXT
 					}
 					app.dos(qtype)
 				}
@@ -356,8 +356,12 @@ type ResolveRequestBody struct {
 }
 
 type ResolveResponseTXTBody struct {
-	RecvTime int64  `json:"recvTime"`
-	RecvIp   string `json:"recvIp"`
+	RecvTime int64 `json:"RecvTime"`
+	RecvIp   struct {
+		IP   string `json:"IP"`
+		Port int    `json:"Port"`
+		Zone string `json:"Zone"`
+	} `json:"RecvIp"`
 }
 
 func readCsvFile(filePath string) [][]string {
