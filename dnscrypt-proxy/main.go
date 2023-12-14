@@ -159,7 +159,7 @@ func main() {
 			q := new(dns.Msg)
 			qtype, exists := dns.StringToType[strings.ToUpper(req.QType)]
 			if !exists {
-				qtype = dns.TypeA
+				qtype = dns.TypeTXT
 			}
 			q.SetQuestion(dns.Fqdn(req.Name), qtype)
 
@@ -196,7 +196,7 @@ func main() {
 
 			if err != nil {
 				limitInt = -1
-				concurrentInt = 3
+				concurrentInt = -1
 			}
 			go app.probe(limitInt, concurrentInt)
 			c.JSON(http.StatusOK, gin.H{
@@ -561,17 +561,23 @@ func (app *App) probe(limit int, maxConcurrent int) {
 	fout.WriteString("server,relay,sendTime,realArrivalTime,realRtt\n")
 	lock := sync.Mutex{}
 
-	// Set max concurrent
-	countChannel := make(chan struct{}, maxConcurrent)
-	waitChannel := make(chan struct{})
-	defer func() {
-		<-waitChannel
-	}()
-
 	failTimes := 0
 	maxFailTimes := 5
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
+
+	// Set max concurrent
+	if maxConcurrent <= 0 {
+		maxConcurrent = groupSize
+	}
+	countChannel := make(chan struct{}, maxConcurrent)
+	waitChannel := make(chan struct{})
+	if maxConcurrent > 0 {
+		defer func() {
+			<-waitChannel
+		}()
+	}
+
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
