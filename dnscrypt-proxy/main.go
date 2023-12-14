@@ -640,7 +640,8 @@ func (app *App) probe(limit int, maxConcurrent int) {
 				return
 			}
 		}
-		log.Printf("Batch probe process: %d/%d, failtimes: %d, totalTimes: %d", i+1, iterTime, failTimes, iterTime*groupSize)
+		log.Printf("Batch probe process: %d/%d, failtimes: %d, totalTimes: %d, failRate: %.2f",
+			i+1, iterTime, failTimes, iterTime*groupSize, float64(failTimes)/float64(iterTime*groupSize))
 	}
 }
 
