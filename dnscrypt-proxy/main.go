@@ -15,6 +15,7 @@ import (
 	"github.com/miekg/dns"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -662,18 +663,18 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			}
 
 			var realArrivalTime int64 = 0
-			var realResolverIp string = ""
+			var realResolverAddr string = ""
 			if q.Question[0].Qtype == dns.TypeTXT {
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
 				json.Unmarshal(txtData, txtJson)
 				realArrivalTime = txtJson.RecvTime
-				realResolverIp = txtJson.RecvIp
+				realResolverAddr = net.JoinHostPort(txtJson.RecvIp.IP, strconv.Itoa(txtJson.RecvIp.Port))
 			}
 
-			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realResolverIp: %s, realRtt: %d",
-				server, relay, realArrivalTime, realResolverIp, realRtt)
+			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realResolverAddr: %s, realRtt: %d",
+				server, relay, realArrivalTime, realResolverAddr, realRtt)
 		}(i)
 	}
 	wg.Wait()
