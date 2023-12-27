@@ -426,12 +426,18 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			minSendTime = sendTime
 		}
 	}
-	// adjust sendTime
+	// adjust sendTime and arrivalTime
+	offset := NowUnixMillion() - minSendTime + 1000
 	for _, record := range records {
 		sendTime, _ := strconv.ParseInt(record[2], 10, 64)
+		arrivalTime, _ := strconv.ParseInt(record[3], 10, 64)
+
 		// 1000ms delay before first send
-		sendTime = sendTime - minSendTime + NowUnixMillion() + 1000
+		sendTime = sendTime + offset
+		arrivalTime = arrivalTime + offset
+
 		record[2] = strconv.FormatInt(sendTime, 10)
+		record[3] = strconv.FormatInt(arrivalTime, 10)
 	}
 
 	for i, record := range records {
