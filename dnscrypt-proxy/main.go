@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -182,7 +183,16 @@ func main() {
 			if !exists {
 				qtype = dns.TypeA
 			}
-			go app.dos(qtype, true)
+
+			multiLevelStr, exists := c.GetQuery("multiLevel")
+			var multiLevel bool
+			if !exists {
+				multiLevel = false
+			} else {
+				multiLevel = multiLevelStr == "true"
+			}
+
+			go app.dos(qtype, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -290,14 +300,15 @@ func main() {
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
+				multiLevel := slices.Contains(args, "multi")
 				if len(args) == 0 {
-					app.dos(dns.TypeTXT, true)
+					app.dos(dns.TypeTXT, multiLevel)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
 						qtype = dns.TypeTXT
 					}
-					app.dos(qtype, true)
+					app.dos(qtype, multiLevel)
 				}
 			}
 		}
