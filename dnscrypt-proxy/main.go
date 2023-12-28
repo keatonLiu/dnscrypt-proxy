@@ -517,6 +517,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	wg.Wait()
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(records),
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
+	log.Printf("Params: qtype: %d, multiLevel: %v", qtype, multiLevel)
 	fout.Close()
 }
 
