@@ -522,6 +522,9 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 }
 
 func (app *App) buildQuery(server string, relay string, index int, qtype uint16, multiLevel bool) *dns.Msg {
+	// remove '.' in server and relay
+	server = strings.ReplaceAll(server, ".", "-")
+	relay = strings.ReplaceAll(relay, ".", "-")
 	domain := fmt.Sprintf("%s,%s.%s-%d.test.xxt.asia", server, relay, RandStringRunes(8), index)
 	// add many levels to trigger more query minimization
 	if multiLevel {
