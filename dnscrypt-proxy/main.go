@@ -189,7 +189,7 @@ func main() {
 			if !exists {
 				multiLevel = false
 			} else {
-				multiLevel = multiLevelStr == "true"
+				multiLevel = strings.ToLower(multiLevelStr) == "true"
 			}
 
 			app.dos(qtype, multiLevel)
