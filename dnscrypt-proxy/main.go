@@ -192,7 +192,7 @@ func main() {
 				multiLevel = multiLevelStr == "true"
 			}
 
-			go app.dos(qtype, multiLevel)
+			app.dos(qtype, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
