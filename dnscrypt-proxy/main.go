@@ -466,7 +466,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			variation, _ := strconv.ParseFloat(record[5], 64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
-			q := app.buildQuery(server, relay, index, qtype, multiLevel)
+			q := app.buildQuery(server, relay, qtype, multiLevel)
 
 			// Sleep until sendTime
 			timeNow := NowUnixMillion()
@@ -624,7 +624,7 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					// Send query
-					q := app.buildQuery(server, relay, reqSeq, dns.TypeTXT, multiLevel)
+					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
 					sendTime := NowUnixMillion()
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
@@ -671,14 +671,14 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 	wg := sync.WaitGroup{}
 	wg.Add(num)
 	for i := 0; i < num; i++ {
-		go func(index int) {
+		go func() {
 			defer wg.Done()
 			// randomly select a server
 			server := app.proxy.serversInfo.inner[rand.Intn(len(app.proxy.serversInfo.inner))].Name
 			// randomly select a relay
 			relay := app.proxy.registeredRelays[rand.Intn(len(app.proxy.registeredRelays))].getName()
 			// build query
-			q := app.buildQuery(server, relay, index, qtype, false)
+			q := app.buildQuery(server, relay, qtype, false)
 			// send query
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
 			if err != nil {
@@ -692,7 +692,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			}
 
 			var realArrivalTime int64 = 0
-			var realResolverAddr string = ""
+			var realResolverAddr = ""
 			if q.Question[0].Qtype == dns.TypeTXT {
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
@@ -704,7 +704,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 
 			log.Printf("server: %s, relay: %s, realArrivalTime: %d, realResolverAddr: %s, realRtt: %d",
 				server, relay, realArrivalTime, realResolverAddr, realRtt)
-		}(i)
+		}()
 	}
 	wg.Wait()
 }
