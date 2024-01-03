@@ -1058,7 +1058,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 		response, rtt, err = proxy.exchangeWithUDPServerOnce(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
 	} else {
 		start := time.Now()
-		response, err = proxy.exchangeWithTCPServer(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
+		response, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
 		rtt = time.Since(start).Milliseconds()
 	}
 

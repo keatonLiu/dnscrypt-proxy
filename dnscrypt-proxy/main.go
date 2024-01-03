@@ -292,7 +292,7 @@ func main() {
 
 				res, rtt, err := app.proxy.ResolveQuery(
 					"tcp", server,
-					relayName, q)
+					relayName, q, 0)
 				if err != nil {
 					dlog.Warn(err)
 					break
@@ -476,7 +476,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			}
 
 			realSendTime := NowUnixMillion()
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
 			// Increase totalCount
 			totalCount.Add(1)
@@ -630,7 +630,7 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
 					sendTime := NowUnixMillion()
-					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
+					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
 					if err != nil || resp == nil {
 						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
@@ -683,7 +683,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			// build query
 			q := app.buildQuery(server, relay, qtype, false)
 			// send query
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 			if err != nil {
 				dlog.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
 				return
