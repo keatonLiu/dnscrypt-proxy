@@ -646,6 +646,16 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	encryptedQuery []byte,
 	clientNonce []byte,
 ) ([]byte, error) {
+	return proxy.exchangeWithTCPServerWithTimeWait(serverInfo, sharedKey, encryptedQuery, clientNonce, 0)
+}
+
+func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
+	serverInfo *ServerInfo,
+	sharedKey *[32]byte,
+	encryptedQuery []byte,
+	clientNonce []byte,
+	timeWait time.Duration,
+) ([]byte, error) {
 	upstreamAddr := serverInfo.TCPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
@@ -672,9 +682,16 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := pc.Write(encryptedQuery); err != nil {
+
+	if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 		return nil, err
 	}
+	dlog.Infof("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+	time.Sleep(timeWait)
+	if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
+		return nil, err
+	}
+
 	encryptedResponse, err := ReadPrefixed(&pc)
 	if err != nil {
 		return nil, err
@@ -1006,7 +1023,7 @@ func (proxy *Proxy) ListAvailableRelays() {
 }
 
 func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
-	relayName string, query *dns.Msg) (resp *dns.Msg, rtt int64, err error) {
+	relayName string, query *dns.Msg, timeWait time.Duration) (resp *dns.Msg, rtt int64, err error) {
 
 	queryBytes, err := query.Pack()
 	if err != nil {

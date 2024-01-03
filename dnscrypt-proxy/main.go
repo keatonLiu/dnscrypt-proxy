@@ -167,7 +167,7 @@ func main() {
 			sendTime := NowUnixMillion()
 			resp, rtt, err := app.proxy.ResolveQuery(
 				req.ServerProtocol, req.Server,
-				req.RelayName, q)
+				req.RelayName, q, time.Duration(req.TimeWait)*time.Millisecond)
 			c.JSON(http.StatusOK, gin.H{
 				"rtt":      rtt,
 				"server":   req,
@@ -367,6 +367,7 @@ type ResolveRequestBody struct {
 	RelayName      string `json:"relayName"`
 	ServerProtocol string `json:"serverProtocol"`
 	QType          string `json:"qType"`
+	TimeWait       int    `json:"timeWait"`
 }
 
 type ResolveResponseTXTBody struct {
