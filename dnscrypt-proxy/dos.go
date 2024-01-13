@@ -229,7 +229,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			q := app.buildQuery(server, relay, qtype, false)
 			// send query
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
-			if err != nil {
+			if err != nil || resp == nil {
 				dlog.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
 				return
 			}
