@@ -106,7 +106,7 @@ type Config struct {
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
-	MongoUri                 string                      `toml:"mongo_uri"`
+	Database                 DatabaseConfig              `toml:"database"`
 }
 
 func newConfig() Config {
@@ -285,6 +285,10 @@ type DNS64Config struct {
 
 type CaptivePortalsConfig struct {
 	MapFile string `toml:"map_file"`
+}
+
+type DatabaseConfig struct {
+	MongoUri string `toml:"mongo_uri"`
 }
 
 type ConfigFlags struct {
@@ -487,7 +491,7 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
 
-	proxy.MongoUri = config.MongoUri
+	proxy.MongoUri = config.Database.MongoUri
 
 	if config.CacheNegTTL > 0 {
 		proxy.cacheNegMinTTL = config.CacheNegTTL

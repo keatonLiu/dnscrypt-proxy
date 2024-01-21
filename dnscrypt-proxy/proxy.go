@@ -687,7 +687,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 		return nil, err
 	}
-	dlog.Infof("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+	//dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 	time.Sleep(timeWait)
 	if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 		return nil, err

@@ -6,12 +6,12 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/log"
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -102,7 +102,7 @@ type SRPair struct {
 	Relay  string
 }
 
-func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
+func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
 	// Iterate through all servers and relays
 	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
@@ -127,24 +127,22 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 		}
 	}
 
-	dlog.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
-	fout, err := os.OpenFile("probe_result.csv", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		log.Fatal("Unable to read input file ", err)
-		return
-	}
-	defer func() {
-		fout.Close()
-		log.Println("Probe finished")
-	}()
+	log.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
 
-	fout.WriteString("server,relay,sendTime,realArrivalTime,realRtt\n")
-	lock := sync.Mutex{}
+	collection := app.mongoClient.Database("odns").Collection("probe")
+	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.D{{"probe_id", 1}},
+	})
+	if err != nil {
+		log.Warnf("Unable to create index: %v", err)
+	}
 
 	failTimes := 0
 	maxFailTimes := 5
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
+
+	log.Infof("groupSize: %d, iterTime: %d", groupSize, iterTime)
 
 	// Set max concurrent
 	if maxConcurrent <= 0 {
@@ -153,14 +151,23 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 	countChannel := make(chan struct{}, maxConcurrent)
 	wg := sync.WaitGroup{}
 	wg.Add(min(iterTime*groupSize, limit))
-	defer wg.Wait()
+
+	stats := &Stats{
+		ProbeId: probeId,
+	}
+	app.StatsMap[probeId] = stats
+	stats.TotalCount.Add(int32(iterTime * groupSize))
+	stats.MultiLevel = multiLevel
+	stats.Running = true
 
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
 			server := srList[index].Server
 			relay := srList[index].Relay
-
+			if stats.Running == false {
+				return
+			}
 			go func(server string, relay string) {
 				countChannel <- struct{}{}
 				defer func() {
@@ -168,14 +175,8 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 					wg.Done()
 				}()
 
-				start := time.Now()
-				defer func() {
-					elapsed := time.Since(start)
-					dlog.Debugf("Current progress: %d/%d, %s-%s, average time: %dms",
-						index+1, iterTime*groupSize, server, relay, elapsed.Milliseconds()/10)
-				}()
-
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
+					stats.CurrentCount.Add(1)
 					// Send query
 					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
@@ -183,7 +184,7 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
 					if err != nil || resp == nil {
-						dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
+						log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						failTimes += 1
 						if failTimes > maxFailTimes {
 							break
@@ -192,7 +193,7 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 							continue
 						}
 					} else if len(resp.Answer) == 0 {
-						dlog.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
+						log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
 						break
 					} else {
 						failTimes = 0
@@ -200,24 +201,42 @@ func (app *App) probe(limit int, maxConcurrent int, multiLevel bool) {
 
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
-					txtJson := &ResolveResponseTXTBody{}
-					json.Unmarshal(txtData, txtJson)
-					realArrivalTime := txtJson.RecvTime
+					txtResp := &ResolveResponseTXTBody{}
+					_ = json.Unmarshal(txtData, txtResp)
 
-					lock.Lock()
-					fout.WriteString(fmt.Sprintf("%s,%s,%d,%d,%d\n", server, relay, sendTime, realArrivalTime, realRtt))
-					lock.Unlock()
+					// Save to mongodb
+					_, err = collection.InsertOne(context.Background(), bson.M{
+						"server":      server,
+						"relay":       relay,
+						"recv_ip":     txtResp.RecvIp.IP,
+						"recv_port":   txtResp.RecvIp.Port,
+						"send_time":   sendTime,
+						"recv_time":   txtResp.RecvTime,
+						"multi_level": multiLevel,
+						"rtt":         realRtt,
+						"probe_id":    probeId,
+					})
+
+					if err != nil {
+						log.Warnf("Unable to save to mongodb: %v", err)
+					}
+
+					stats.SuccessCount.Add(1)
+
+					log.Infof("[%s] [%d/%d]Probe success: %s,%s, realRtt: %dms", probeId, stats.CurrentCount.Load(),
+						stats.TotalCount.Load(), server, relay, realRtt)
 				}
 			}(server, relay)
 
 			// Limit the number of probes
 			if limit > 0 && index+1 >= limit {
-				return
+				goto finish
 			}
 		}
-		log.Printf("Batch probe process: %d/%d, failtimes: %d, totalTimes: %d, failRate: %.2f",
-			i+1, iterTime, failTimes, iterTime*groupSize, float64(failTimes)/float64(iterTime*groupSize))
 	}
+
+finish:
+	wg.Wait()
 }
 
 func (app *App) randomQueryTest(num int, qtype uint16) {
@@ -337,7 +356,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			// Sleep until sendTime
 			sleepTime := time.Duration(sendTime-NowUnixMillion()) * time.Millisecond
 			if sleepTime > 0 {
-				log.Println("Sleep time: ", sleepTime)
+				log.Info("Sleep time: ", sleepTime)
 				time.Sleep(sleepTime)
 			}
 
@@ -426,17 +445,17 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q,
 				time.Duration(delay)*time.Millisecond)
 			if err != nil {
-				dlog.Warn(err)
+				log.Warn(err)
 				return
 			}
 
 			if len(resp.Answer) == 0 {
-				dlog.Warn("resp.Answer is empty")
+				log.Warn("resp.Answer is empty")
 				return
 			}
 
-			log.Println("Current progress: ", delay, "ms, realRtt: ", realRtt-int64(delay), "ms")
+			log.Info("Current progress: ", delay, "ms, realRtt: ", realRtt-int64(delay), "ms")
 		}()
 	}
-	log.Println("DOS pending attack finised")
+	log.Info("DOS pending attack finised")
 }

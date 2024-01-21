@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"flag"
@@ -10,6 +11,9 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/kardianos/service"
 	"github.com/miekg/dns"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -18,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,10 +32,21 @@ const (
 )
 
 type App struct {
-	wg    sync.WaitGroup
-	quit  chan struct{}
-	proxy *Proxy
-	flags *ConfigFlags
+	wg          sync.WaitGroup
+	quit        chan struct{}
+	proxy       *Proxy
+	flags       *ConfigFlags
+	mongoClient *mongo.Client
+	StatsMap    map[string]*Stats
+}
+
+type Stats struct {
+	ProbeId      string       `json:"probe_id"`
+	TotalCount   atomic.Int32 `json:"total_count"`
+	CurrentCount atomic.Int32 `json:"current_count"`
+	SuccessCount atomic.Int32 `json:"success_count"`
+	MultiLevel   bool         `json:"multi_level"`
+	Running      bool         `json:"running"`
 }
 
 func main() {
@@ -139,6 +155,14 @@ func (app *App) AppMain() {
 	if err := ConfigLoad(app.proxy, app.flags); err != nil {
 		dlog.Fatal(err)
 	}
+
+	var err error
+	app.mongoClient, err = mongo.Connect(context.Background(), options.Client().ApplyURI(app.proxy.MongoUri))
+	if err != nil {
+		dlog.Errorf("Failed to connect to MongoDB: [%v]", err)
+		return
+	}
+
 	if err := PidFileCreate(); err != nil {
 		dlog.Errorf("Unable to create the PID file: [%v]", err)
 	}
@@ -246,19 +270,45 @@ func (app *App) startApi() {
 
 		r.GET("/probe", func(c *gin.Context) {
 			limit, _ := c.GetQuery("limit")
-			limitInt, err := strconv.Atoi(limit)
+			limitInt, _ := strconv.Atoi(limit)
 			concurrentStr, _ := c.GetQuery("concurrent")
-			concurrentInt, err := strconv.Atoi(concurrentStr)
+			concurrentInt, _ := strconv.Atoi(concurrentStr)
 			multiLevelStr, _ := c.GetQuery("multiLevel")
 			multiLevel := multiLevelStr == "true"
 
-			if err != nil {
-				limitInt = -1
-				concurrentInt = -1
+			if limitInt <= 0 {
+				limitInt = math.MaxInt
 			}
-			go app.probe(limitInt, concurrentInt, multiLevel)
+			probeId := strconv.FormatInt(NowUnixMillion(), 10)
+			go app.probe(probeId, limitInt, concurrentInt, multiLevel)
+			c.JSON(http.StatusOK, gin.H{
+				"probe_id": probeId,
+				"msg":      "ok",
+			})
+		})
+
+		r.GET("/probe/stop", func(c *gin.Context) {
+			probeId, _ := c.GetQuery("probe_id")
+			if probeId == "" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "probe_id is required",
+				})
+				return
+			}
+
+			if stats, exists := app.StatsMap[probeId]; exists {
+				stats.Running = false
+			}
+
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
+			})
+		})
+
+		r.GET("/probe/list", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"msg":  "ok",
+				"data": app.StatsMap,
 			})
 		})
 
