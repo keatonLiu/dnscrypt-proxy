@@ -90,7 +90,8 @@ func main() {
 	}
 
 	app := &App{
-		flags: &flags,
+		flags:    &flags,
+		StatsMap: make(map[string]*Stats),
 	}
 
 	svcConfig := &service.Config{
@@ -349,7 +350,7 @@ func (app *App) startApi() {
 			})
 		})
 
-		r.Run(":8080")
+		_ = r.Run(":8080")
 		dlog.Noticef("API Server started at %s", ":8080")
 	}()
 
@@ -374,7 +375,10 @@ func (app *App) startApi() {
 			case "list-r":
 				app.proxy.ListAvailableRelays()
 			case "refresh":
-				app.proxy.serversInfo.refresh(app.proxy)
+				_, err := app.proxy.serversInfo.refresh(app.proxy)
+				if err != nil {
+					dlog.Warn(err)
+				}
 			case "resolve":
 				var name string
 				if len(args) == 0 {
