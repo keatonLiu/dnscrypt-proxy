@@ -103,6 +103,7 @@ type Proxy struct {
 	SourceDNSCrypt                bool
 	SourceDoH                     bool
 	SourceODoH                    bool
+	MongoUri                      string
 }
 
 func (proxy *Proxy) registerUDPListener(conn *net.UDPConn) {

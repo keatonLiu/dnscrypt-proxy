@@ -106,6 +106,7 @@ type Config struct {
 	DoHClientX509AuthLegacy  DoHClientX509AuthConfig     `toml:"tls_client_auth"`
 	DNS64                    DNS64Config                 `toml:"dns64"`
 	EDNSClientSubnet         []string                    `toml:"edns_client_subnet"`
+	MongoUri                 string                      `toml:"mongo_uri"`
 }
 
 func newConfig() Config {
@@ -485,6 +486,8 @@ func ConfigLoad(proxy *Proxy, flags *ConfigFlags) error {
 	proxy.pluginBlockUndelegated = config.BlockUndelegated
 	proxy.cache = config.Cache
 	proxy.cacheSize = config.CacheSize
+
+	proxy.MongoUri = config.MongoUri
 
 	if config.CacheNegTTL > 0 {
 		proxy.cacheNegMinTTL = config.CacheNegTTL

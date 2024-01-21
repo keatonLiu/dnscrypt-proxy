@@ -265,14 +265,14 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 func (app *App) dos(qtype uint16, multiLevel bool) {
 	ctx := context.Background()
 	// creat mongodb client
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
 	if err != nil {
 		dlog.Errorf("Unable to connect to mongodb: %v", err)
 		return
 	}
 	// find latest probe
 	collection := client.Database("odns").Collection("prepare")
-	cursor, err := collection.Find(ctx, nil, options.Find().SetSort(bson.D{{"probe_id", -1}}))
+	cursor, err := collection.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{"probe_id", -1}}))
 	if err != nil {
 		dlog.Errorf("Unable to find latest probe: %v", err)
 		return
@@ -288,8 +288,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 		dlog.Errorf("Unable to find latest probe")
 		return
 	}
+
+	probeId := latestProbe["probe_id"].(string)
 	// find all with latest probe_id
-	cursor, err = collection.Find(ctx, bson.M{"probe_id": latestProbe["probe_id"]})
+	cursor, err = collection.Find(ctx, bson.M{"probe_id": probeId})
 	if err != nil {
 		dlog.Errorf("Unable to find latest probe: %v", err)
 		return
@@ -302,36 +304,18 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 
 	// sort prepareList by send_time asc, using library
 	sort.Slice(prepareList, func(i, j int) bool {
-		return prepareList[i]["send_time"].(int64) < prepareList[j]["send_time"].(int64)
+		return prepareList[i]["send_time"].(int32) < prepareList[j]["send_time"].(int32)
 	})
-
-	// Connect to send_result collection
-	collectionResult := client.Database("odns").Collection("send_result")
 
 	fmt.Println("Prepared list length: ", len(prepareList))
 
 	// start dos
 	var totalCount atomic.Uint64
 	var successCount atomic.Uint64
-	// get the minimum sendTime
-	minSendTime := int64(0)
-	for _, record := range prepareList {
-		sendTime := record["send_time"].(int64)
-		if minSendTime == 0 || sendTime < minSendTime {
-			minSendTime = sendTime
-		}
-	}
+
+	var resultList = make(bson.A, 0)
 	// adjust sendTime and arrivalTime
-	offset := NowUnixMillion() - minSendTime + 1000
-	for _, record := range prepareList {
-		sendTime := record["send_time"].(int64)
-		arrivalTime := record["arrival_time"].(int64)
-
-		// 1000ms delay before first send
-		record["send_time"] = sendTime + offset
-		record["arrival_time"] = arrivalTime + offset
-	}
-
+	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
 	wg.Add(len(prepareList))
 	for i, record := range prepareList {
@@ -342,10 +326,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 
 			server := record["server"].(string)
 			relay := record["relay"].(string)
-			sendTime := record["send_time"].(int64)
-			arrivalTime := record["arrival_time"].(int64)
-			rtt := record["rtt"].(int64)
-			variation := record["variation"].(int64)
+			sendTime := int64(record["send_time"].(int32)) + offset
+			arriveTime := int64(record["arrival_time"].(int32)) + offset
+			rtt := record["rtt"].(float64)
+			std := record["std"].(float64)
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			q := app.buildQuery(server, relay, qtype, multiLevel)
@@ -353,7 +337,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			// Sleep until sendTime
 			sleepTime := time.Duration(sendTime-NowUnixMillion()) * time.Millisecond
 			if sleepTime > 0 {
-				log.Println("Sleep time: ", sleepTime, "ms")
+				log.Println("Sleep time: ", sleepTime)
 				time.Sleep(sleepTime)
 			}
 
@@ -368,43 +352,56 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				return
 			}
 
-			var realArrivalTime int64
+			var realArriveTime int64
 			var sendTimeDiff int64
 			if q.Question[0].Qtype == dns.TypeA {
-				realArrivalTime = 0
+				realArriveTime = 0
 				sendTimeDiff = 0
 			} else {
 				sendTimeDiff = realSendTime - sendTime
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
-				json.Unmarshal(txtData, txtJson)
-				realArrivalTime = txtJson.RecvTime
+				_ = json.Unmarshal(txtData, txtJson)
+				realArriveTime = txtJson.RecvTime
 			}
 
-			// write send result to remote mongodb
-			_, err = collectionResult.InsertOne(ctx, bson.M{
-				"server":          server,
-				"relay":           relay,
-				"sendTime":        sendTime,
-				"realSendTime":    realSendTime,
-				"sendTimeDiff":    sendTimeDiff,
-				"arrivalTime":     arrivalTime,
-				"realArrivalTime": realArrivalTime,
-				"realRtt":         realRtt,
-				"rtt":             rtt,
-				"variation":       variation,
-				"probe_id":        latestProbe["probe_id"],
+			// save temp result to local
+			resultList = append(resultList, bson.M{
+				"server":           server,
+				"relay":            relay,
+				"send_time":        sendTime,
+				"real_send_time":   realSendTime,
+				"send_time_diff":   sendTimeDiff,
+				"arrive_time":      arriveTime,
+				"real_arrive_time": realArriveTime,
+				"arrive_time_diff": realArriveTime - arriveTime,
+				"realRtt":          realRtt,
+				"rtt":              rtt,
+				"rtt_diff":         realRtt - int64(rtt),
+				"std":              std,
+				"probe_id":         probeId,
 			})
-			if err != nil {
-				dlog.Errorf("Unable to write send result to mongodb: %v", err)
-				return
-			}
 
 			successCount.Add(1)
 		}(recordCopy, i)
 	}
 	wg.Wait()
+
+	// Connect to result collection
+	collectionResult := client.Database("odns").Collection("result")
+	// clear result collection
+	if _, err := collectionResult.DeleteMany(ctx, bson.M{"probe_id": probeId}); err != nil {
+		dlog.Errorf("Unable to clear collection result: %v", err)
+		return
+	}
+
+	// write result to remote mongodb in one batch
+	if _, err := collectionResult.InsertMany(ctx, resultList); err != nil {
+		dlog.Errorf("Unable to write send result to mongodb: %v", err)
+		return
+	}
+
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(prepareList),
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
 	log.Printf("Params: qtype: %s, multiLevel: %v", dns.TypeToString[qtype], multiLevel)

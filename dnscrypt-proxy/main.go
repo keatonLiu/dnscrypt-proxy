@@ -229,12 +229,7 @@ func (app *App) startApi() {
 			}
 
 			multiLevelStr, exists := c.GetQuery("multiLevel")
-			var multiLevel bool
-			if !exists {
-				multiLevel = false
-			} else {
-				multiLevel = strings.ToLower(multiLevelStr) == "true"
-			}
+			multiLevel := strings.ToLower(multiLevelStr) == "true"
 
 			app.dos(qtype, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
