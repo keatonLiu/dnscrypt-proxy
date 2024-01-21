@@ -301,10 +301,9 @@ func (app *App) startApi() {
 			if stats, exists := app.StatsMap[probeId]; exists {
 				stats.Running = false
 			} else {
-				c.JSON(http.StatusBadRequest, gin.H{
+				c.JSON(http.StatusOK, gin.H{
 					"error": "probe_id not found",
 				})
-				return
 			}
 
 			c.JSON(http.StatusOK, gin.H{
