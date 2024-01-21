@@ -152,13 +152,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	wg := sync.WaitGroup{}
 	wg.Add(min(iterTime*groupSize, limit))
 
-	stats := &Stats{
-		ProbeId: probeId,
-	}
-	app.StatsMap[probeId] = stats
+	stats := app.StatsMap[probeId]
 	stats.TotalCount.Add(int32(iterTime * groupSize * 10))
-	stats.MultiLevel = multiLevel
-	stats.Running = true
 
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {

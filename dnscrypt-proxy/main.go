@@ -282,6 +282,12 @@ func (app *App) startApi() {
 			}
 
 			probeId := strconv.FormatInt(NowUnixMillion(), 10)
+			stats := &Stats{
+				ProbeId: probeId,
+			}
+			app.StatsMap[probeId] = stats
+			stats.MultiLevel = multiLevel
+			stats.Running = true
 			go app.probe(probeId, limitInt, concurrentInt, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
 				"probe_id": probeId,
@@ -293,7 +299,8 @@ func (app *App) startApi() {
 			probeId := c.Query("probe_id")
 			if probeId == "" {
 				c.JSON(http.StatusBadRequest, gin.H{
-					"error": "probe_id is required",
+					"status": 1,
+					"error":  "probe_id is required",
 				})
 				return
 			}
@@ -302,12 +309,14 @@ func (app *App) startApi() {
 				stats.Running = false
 			} else {
 				c.JSON(http.StatusOK, gin.H{
-					"error": "probe_id not found",
+					"status": 2,
+					"error":  "probe_id not found",
 				})
 			}
 
 			c.JSON(http.StatusOK, gin.H{
-				"msg": "ok",
+				"status": 0,
+				"msg":    "ok",
 			})
 		})
 
