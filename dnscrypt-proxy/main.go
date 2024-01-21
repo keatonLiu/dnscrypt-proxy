@@ -324,18 +324,21 @@ func (app *App) startApi() {
 			probeId := c.Query("probe_id")
 			if probeId == "" {
 				c.JSON(http.StatusOK, gin.H{
-					"msg":  "ok",
-					"data": app.StatsMap,
+					"status": 0,
+					"msg":    "ok",
+					"data":   app.StatsMap,
 				})
 			} else {
 				if stats, exists := app.StatsMap[probeId]; exists {
 					c.JSON(http.StatusOK, gin.H{
-						"msg":  "ok",
-						"data": stats,
+						"status": 0,
+						"msg":    "ok",
+						"data":   stats,
 					})
 				} else {
 					c.JSON(http.StatusBadRequest, gin.H{
-						"error": "probe_id not found",
+						"status": 1,
+						"error":  "probe_id not found",
 					})
 				}
 			}
