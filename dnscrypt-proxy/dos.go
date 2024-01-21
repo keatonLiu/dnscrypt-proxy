@@ -156,7 +156,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		ProbeId: probeId,
 	}
 	app.StatsMap[probeId] = stats
-	stats.TotalCount.Add(int32(iterTime * groupSize))
+	stats.TotalCount.Add(int32(iterTime * groupSize * 10))
 	stats.MultiLevel = multiLevel
 	stats.Running = true
 
