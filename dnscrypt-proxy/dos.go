@@ -172,6 +172,9 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 				for reqSeq := 0; reqSeq < 10; reqSeq++ {
 					stats.CurrentCount.Add(1)
+					if stats.Running == false {
+						return
+					}
 					// Send query
 					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
