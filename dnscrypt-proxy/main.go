@@ -333,7 +333,14 @@ func (app *App) startApi() {
 					c.JSON(http.StatusOK, gin.H{
 						"status": 0,
 						"msg":    "ok",
-						"data":   stats,
+						"data": gin.H{
+							"probe_id":      probeId,
+							"total_count":   stats.TotalCount.Load(),
+							"current_count": stats.CurrentCount.Load(),
+							"success_count": stats.SuccessCount.Load(),
+							"multi_level":   stats.MultiLevel,
+							"running":       stats.Running,
+						},
 					})
 				} else {
 					c.JSON(http.StatusBadRequest, gin.H{
