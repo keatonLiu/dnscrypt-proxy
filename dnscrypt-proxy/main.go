@@ -340,6 +340,7 @@ func (app *App) startApi() {
 							"success_count": stats.SuccessCount.Load(),
 							"multi_level":   stats.MultiLevel,
 							"running":       stats.Running,
+							"success_rate":  float64(stats.SuccessCount.Load()) / float64(stats.TotalCount.Load()) * 100,
 						},
 					})
 				} else {
