@@ -269,16 +269,17 @@ func (app *App) startApi() {
 		})
 
 		r.GET("/probe", func(c *gin.Context) {
-			limit, _ := c.GetQuery("limit")
+			limit := c.Query("limit")
 			limitInt, _ := strconv.Atoi(limit)
-			concurrentStr, _ := c.GetQuery("concurrent")
+			concurrentStr := c.Query("concurrent")
 			concurrentInt, _ := strconv.Atoi(concurrentStr)
-			multiLevelStr, _ := c.GetQuery("multiLevel")
+			multiLevelStr := c.Query("multiLevel")
 			multiLevel := multiLevelStr == "true"
 
 			if limitInt <= 0 {
 				limitInt = math.MaxInt
 			}
+
 			probeId := strconv.FormatInt(NowUnixMillion(), 10)
 			go app.probe(probeId, limitInt, concurrentInt, multiLevel)
 			c.JSON(http.StatusOK, gin.H{
@@ -288,7 +289,7 @@ func (app *App) startApi() {
 		})
 
 		r.GET("/probe/stop", func(c *gin.Context) {
-			probeId, _ := c.GetQuery("probe_id")
+			probeId := c.Query("probe_id")
 			if probeId == "" {
 				c.JSON(http.StatusBadRequest, gin.H{
 					"error": "probe_id is required",
@@ -298,6 +299,11 @@ func (app *App) startApi() {
 
 			if stats, exists := app.StatsMap[probeId]; exists {
 				stats.Running = false
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "probe_id not found",
+				})
+				return
 			}
 
 			c.JSON(http.StatusOK, gin.H{
@@ -306,10 +312,24 @@ func (app *App) startApi() {
 		})
 
 		r.GET("/probe/list", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"msg":  "ok",
-				"data": app.StatsMap,
-			})
+			probeId := c.Query("probe_id")
+			if probeId == "" {
+				c.JSON(http.StatusOK, gin.H{
+					"msg":  "ok",
+					"data": app.StatsMap,
+				})
+			} else {
+				if stats, exists := app.StatsMap[probeId]; exists {
+					c.JSON(http.StatusOK, gin.H{
+						"msg":  "ok",
+						"data": stats,
+					})
+				} else {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"error": "probe_id not found",
+					})
+				}
+			}
 		})
 
 		r.GET("/rand-test", func(c *gin.Context) {
