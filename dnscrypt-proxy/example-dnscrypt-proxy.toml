@@ -900,3 +900,6 @@ skip_incompatible = false
 
   # [static.myserver]
   #   stamp = 'sdns://AQcAAAAAAAAAAAAQMi5kbnNjcnlwdC1jZXJ0Lg'
+
+# Mongo DB URI
+mongodb_uri = 'mongodb://localhost:27017'
