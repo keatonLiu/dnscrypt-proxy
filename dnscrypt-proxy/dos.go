@@ -139,6 +139,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 	failTimes := 0
 	maxFailTimes := 5
+	repeatProbeTimes := 10
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
 
@@ -153,7 +154,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	wg.Add(min(iterTime*groupSize, limit))
 
 	stats := app.StatsMap[probeId]
-	stats.TotalCount.Add(int32(iterTime * groupSize * 10))
+	stats.TotalCount.Add(int32(iterTime * groupSize * repeatProbeTimes))
+	defer func() {
+		stats.Running = false
+	}()
 
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {
@@ -170,8 +174,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					wg.Done()
 				}()
 
-				for reqSeq := 0; reqSeq < 10; reqSeq++ {
-					stats.CurrentCount.Add(1)
+				for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
 					if stats.Running == false {
 						return
 					}
@@ -181,9 +184,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					sendTime := NowUnixMillion()
 					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
+					stats.CurrentCount.Add(1)
 					if err != nil || resp == nil {
 						log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 						failTimes += 1
+						stats.FailCount.Add(1)
 						if failTimes > maxFailTimes {
 							break
 						} else {
@@ -191,12 +196,12 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							continue
 						}
 					} else if len(resp.Answer) == 0 {
+						stats.FailCount.Add(1)
 						log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
 						break
 					} else {
 						failTimes = 0
 					}
-
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
 					txtResp := &ResolveResponseTXTBody{}
