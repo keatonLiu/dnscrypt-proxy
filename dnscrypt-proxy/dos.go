@@ -331,11 +331,17 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 
 	fmt.Println("Prepared list length: ", len(prepareList))
 
+	// clear result collection
+	collectionResult := client.Database("odns").Collection("result")
+	if _, err := collectionResult.DeleteMany(ctx, bson.M{"probe_id": probeId}); err != nil {
+		dlog.Errorf("Unable to clear collection result: %v", err)
+		return
+	}
+
 	// start dos
 	var totalCount atomic.Uint64
 	var successCount atomic.Uint64
 
-	var resultList = make(bson.A, 0)
 	// adjust sendTime and arrivalTime
 	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
@@ -389,7 +395,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			}
 
 			// save temp result to local
-			resultList = append(resultList, bson.M{
+			if _, err = collectionResult.InsertOne(ctx, bson.M{
 				"server":           server,
 				"relay":            relay,
 				"send_time":        sendTime,
@@ -403,26 +409,14 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"rtt_diff":         realRtt - int64(rtt),
 				"std":              std,
 				"probe_id":         probeId,
-			})
+			}); err != nil {
+				log.Errorf("Unable to save to mongodb: %v", err)
+			}
 
 			successCount.Add(1)
 		}(recordCopy, i)
 	}
 	wg.Wait()
-
-	// Connect to result collection
-	collectionResult := client.Database("odns").Collection("result")
-	// clear result collection
-	if _, err := collectionResult.DeleteMany(ctx, bson.M{"probe_id": probeId}); err != nil {
-		dlog.Errorf("Unable to clear collection result: %v", err)
-		return
-	}
-
-	// write result to remote mongodb in one batch
-	if _, err := collectionResult.InsertMany(ctx, resultList); err != nil {
-		dlog.Errorf("Unable to write send result to mongodb: %v", err)
-		return
-	}
 
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(prepareList),
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
