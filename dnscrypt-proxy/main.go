@@ -48,6 +48,7 @@ type Stats struct {
 	FailCount    atomic.Int32 `json:"fail_count"`
 	MultiLevel   bool         `json:"multi_level"`
 	Running      bool         `json:"running"`
+	Concurrent   int          `json:"concurrent"`
 }
 
 func main() {
@@ -332,8 +333,8 @@ func (app *App) startApi() {
 			} else {
 				if stats, exists := app.StatsMap[probeId]; exists {
 					var successRate float64
-					if stats.TotalCount.Load() > 0 {
-						successRate = float64(stats.SuccessCount.Load()) / float64(stats.TotalCount.Load()) * 100
+					if stats.CurrentCount.Load() > 0 {
+						successRate = float64(stats.SuccessCount.Load()) / float64(stats.CurrentCount.Load()) * 100
 					}
 					c.JSON(http.StatusOK, gin.H{
 						"status": 0,
@@ -346,6 +347,7 @@ func (app *App) startApi() {
 							"multi_level":   stats.MultiLevel,
 							"running":       stats.Running,
 							"success_rate":  successRate,
+							"concurrent":    stats.Concurrent,
 						},
 					})
 				} else {

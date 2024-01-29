@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/log"
@@ -14,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math/rand"
 	"net"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,22 +37,6 @@ type ResolveResponseTXTBody struct {
 		Port int    `json:"Port"`
 		Zone string `json:"Zone"`
 	} `json:"RecvIp"`
-}
-
-func readCsvFile(filePath string) [][]string {
-	f, err := os.Open(filePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-
-	csvReader := csv.NewReader(f)
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		log.Fatal("Unable to parse file as CSV for "+filePath, err)
-	}
-
-	return records
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -155,6 +137,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 	stats := app.StatsMap[probeId]
 	stats.TotalCount.Add(int32(iterTime * groupSize * repeatProbeTimes))
+	stats.Concurrent = maxConcurrent
 	defer func() {
 		stats.Running = false
 	}()
