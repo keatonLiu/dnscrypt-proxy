@@ -330,6 +330,10 @@ func (app *App) startApi() {
 				})
 			} else {
 				if stats, exists := app.StatsMap[probeId]; exists {
+					var successRate float64
+					if stats.TotalCount.Load() > 0 {
+						successRate = float64(stats.SuccessCount.Load()) / float64(stats.TotalCount.Load()) * 100
+					}
 					c.JSON(http.StatusOK, gin.H{
 						"status": 0,
 						"msg":    "ok",
@@ -340,7 +344,7 @@ func (app *App) startApi() {
 							"success_count": stats.SuccessCount.Load(),
 							"multi_level":   stats.MultiLevel,
 							"running":       stats.Running,
-							"success_rate":  float64(stats.SuccessCount.Load()) / float64(stats.TotalCount.Load()) * 100,
+							"success_rate":  successRate,
 						},
 					})
 				} else {
