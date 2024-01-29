@@ -45,6 +45,7 @@ type Stats struct {
 	TotalCount   atomic.Int32 `json:"total_count"`
 	CurrentCount atomic.Int32 `json:"current_count"`
 	SuccessCount atomic.Int32 `json:"success_count"`
+	FailCount    atomic.Int32 `json:"fail_count"`
 	MultiLevel   bool         `json:"multi_level"`
 	Running      bool         `json:"running"`
 }
