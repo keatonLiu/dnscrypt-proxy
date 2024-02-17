@@ -161,6 +161,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					if stats.Running == false {
 						return
 					}
+
+					if stats.CurrentCount.Load() >= int32(limit) {
+						return
+					}
+
 					// Send query
 					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
@@ -214,15 +219,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						stats.TotalCount.Load(), server, relay, realRtt)
 				}
 			}(server, relay)
-
-			// Limit the number of probes
-			if limit > 0 && index+1 >= limit {
-				goto finish
-			}
 		}
 	}
-
-finish:
 	wg.Wait()
 }
 
