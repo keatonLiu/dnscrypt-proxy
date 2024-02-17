@@ -13,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math/rand"
 	"net"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,6 +199,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						"recv_time":   txtResp.RecvTime,
 						"multi_level": multiLevel,
 						"rtt":         realRtt,
+						"stt":         txtResp.RecvTime - sendTime,
 						"probe_id":    probeId,
 					})
 
@@ -277,41 +277,26 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	}
 	// find latest probe
 	collection := client.Database("odns").Collection("prepare")
-	cursor, err := collection.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{{"probe_id", -1}}))
-	if err != nil {
-		dlog.Errorf("Unable to find latest probe: %v", err)
-		return
-	}
+	result := collection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
 	var latestProbe bson.M
-	if cursor.Next(ctx) {
-		err := cursor.Decode(&latestProbe)
-		if err != nil {
-			return
-		}
-	}
+	err = result.Decode(&latestProbe)
 	if latestProbe == nil {
-		dlog.Errorf("Unable to find latest probe")
+		dlog.Errorf("Unable to find latest probe, err:%v", err)
 		return
 	}
 
 	probeId := latestProbe["probe_id"].(string)
 	// find all with latest probe_id
-	cursor, err = collection.Find(ctx, bson.M{"probe_id": probeId})
+	cursor, err := collection.Find(ctx, bson.M{"probe_id": probeId}, options.Find().SetSort(bson.D{{"send_time", 1}}))
 	if err != nil {
-		dlog.Errorf("Unable to find latest probe: %v", err)
+		dlog.Errorf("Unable to find probe_id: %v, err: %v", probeId, err)
 		return
 	}
 	var prepareList []bson.M
 	if err = cursor.All(ctx, &prepareList); err != nil {
-		dlog.Errorf("Unable to find latest probe: %v", err)
+		dlog.Errorf("Unable to find prepareList: %v", err)
 		return
 	}
-
-	// sort prepareList by send_time asc, using library
-	sort.Slice(prepareList, func(i, j int) bool {
-		return prepareList[i]["send_time"].(int32) < prepareList[j]["send_time"].(int32)
-	})
-
 	fmt.Println("Prepared list length: ", len(prepareList))
 
 	// clear result collection
