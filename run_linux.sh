@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "pulling dnscrypt-proxy source code"
+git pull origin odns-probe
+
 export GOOS=linux
 echo "Building for $GOOS"
 
