@@ -135,7 +135,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	wg.Add(min(iterTime*groupSize, limit))
 
 	stats := app.StatsMap[probeId]
-	stats.TotalCount.Add(int32(iterTime * groupSize * repeatProbeTimes))
+	totalCount := Max(iterTime*groupSize*repeatProbeTimes, limit)
+	stats.TotalCount.Add(int32(totalCount))
 	stats.Concurrent = maxConcurrent
 	defer func() {
 		stats.Running = false
