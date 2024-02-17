@@ -372,7 +372,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"arrive_time":      arriveTime,
 				"real_arrive_time": realArriveTime,
 				"arrive_time_diff": realArriveTime - arriveTime,
-				"realRtt":          realRtt,
+				"real_rtt":         realRtt,
 				"rtt":              rtt,
 				"rtt_diff":         realRtt - int64(rtt),
 				"std":              std,
