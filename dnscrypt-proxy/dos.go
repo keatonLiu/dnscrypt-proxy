@@ -297,7 +297,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	result := collection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
 	var latestProbe *PrepareListRecord
 	err = result.Decode(&latestProbe)
-	if latestProbe == nil {
+	if latestProbe == nil || err != nil {
 		dlog.Errorf("Unable to find latest probe, err:%v", err)
 		return
 	}
