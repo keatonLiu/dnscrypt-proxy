@@ -147,11 +147,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
 					sendTime := NowUnixMillion()
-					resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+					resp, rtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
 					stats.CurrentCount.Add(1)
 					if err != nil || resp == nil {
-						log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
+						log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, rtt: %dms", server, relay, err, resp, rtt)
 						failTimes += 1
 						stats.FailCount.Add(1)
 						if failTimes > maxFailTimes {
@@ -181,7 +181,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						"send_time":   sendTime,
 						"recv_time":   txtResp.RecvTime,
 						"multi_level": multiLevel,
-						"rtt":         realRtt,
+						"rtt":         rtt,
 						"stt":         txtResp.RecvTime - sendTime,
 						"probe_id":    probeId,
 					})
@@ -192,8 +192,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 					stats.SuccessCount.Add(1)
 
-					log.Infof("[%s] [%d/%d]Probe success: %s,%s, realRtt: %dms", probeId, stats.CurrentCount.Load(),
-						stats.TotalCount.Load(), server, relay, realRtt)
+					log.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
+						stats.TotalCount.Load(), server, relay, rtt)
 				}
 			}(server, relay)
 		}

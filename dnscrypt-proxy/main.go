@@ -283,7 +283,7 @@ func (app *App) startApi() {
 				limitInt = math.MaxInt
 			}
 
-			probeId := strconv.FormatInt(NowUnixMillion(), 10)
+			probeId := timeNow().Format("20060102150405")
 			stats := &Stats{
 				ProbeId: probeId,
 			}
