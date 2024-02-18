@@ -125,6 +125,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 			if stats.Running == false {
 				return
 			}
+
+			if index >= limit {
+				goto finish
+			}
+
 			go func(server string, relay string) {
 				countChannel <- struct{}{}
 				defer func() {
@@ -135,11 +140,6 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 				failTimes := 0
 				for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
 					if stats.Running == false {
-						return
-					}
-
-					if stats.CurrentCount.Load() >= int32(limit) {
-						dlog.Infof("Reach limit: %d", limit)
 						return
 					}
 
@@ -198,6 +198,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 			}(server, relay)
 		}
 	}
+finish:
 	wg.Wait()
 }
 
