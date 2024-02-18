@@ -278,8 +278,8 @@ type PrepareListRecord struct {
 	Relay      string  `bson:"relay"`
 	SendTime   int32   `bson:"send_time"`
 	ArriveTime int32   `bson:"arrive_time"`
-	Rtt        int32   `bson:"rtt"`
-	Stt        int32   `bson:"stt"`
+	Rtt        float64 `bson:"rtt"`
+	Stt        float64 `bson:"stt"`
 	Std        float64 `bson:"std"` // 该SR对的RTT的标准差
 	ProbeId    string  `bson:"probe_id"`
 }
