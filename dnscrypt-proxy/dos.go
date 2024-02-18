@@ -94,7 +94,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		log.Warnf("Unable to create index: %v", err)
 	}
 
-	maxFailTimes := 5
+	maxFailTimes := 3
 	repeatProbeTimes := 10
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
@@ -274,14 +274,14 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 }
 
 type PrepareListRecord struct {
-	Server     string  `json:"server"`
-	Relay      string  `json:"relay"`
-	SendTime   int32   `json:"send_time"`
-	ArriveTime int32   `json:"arrive_time"`
-	Rtt        int32   `json:"rtt"`
-	Stt        int32   `json:"stt"`
-	Std        float64 `json:"std"` // 该SR对的RTT的标准差
-	ProbeId    string  `json:"probe_id"`
+	Server     string  `bson:"server"`
+	Relay      string  `bson:"relay"`
+	SendTime   int32   `bson:"send_time"`
+	ArriveTime int32   `bson:"arrive_time"`
+	Rtt        int32   `bson:"rtt"`
+	Stt        int32   `bson:"stt"`
+	Std        float64 `bson:"std"` // 该SR对的RTT的标准差
+	ProbeId    string  `bson:"probe_id"`
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool) {
@@ -303,6 +303,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	}
 
 	probeId := latestProbe.ProbeId
+	dlog.Infof("Latest probe_id: %v", probeId)
 	// find all with latest probe_id
 	cursor, err := collection.Find(ctx, bson.M{"probe_id": probeId}, options.Find().
 		SetSort(bson.D{{"send_time", 1}}))
@@ -312,10 +313,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	}
 	var prepareList []*PrepareListRecord
 	if err = cursor.All(ctx, &prepareList); err != nil {
-		dlog.Errorf("Unable to find prepareList: %v", err)
+		dlog.Errorf("Unable to read prepareList: %v", err)
 		return
 	}
-	fmt.Println("Prepared list length: ", len(prepareList))
+	dlog.Infof("Prepared list length: %d", len(prepareList))
 
 	// clear result collection
 	collectionResult := client.Database("odns").Collection("result")
