@@ -277,7 +277,8 @@ type PrepareListRecord struct {
 	Relay      string  `json:"relay"`
 	SendTime   int32   `json:"send_time"`
 	ArriveTime int32   `json:"arrive_time"`
-	Rtt        float64 `json:"rtt"`
+	Rtt        int32   `json:"rtt"`
+	Stt        int32   `json:"stt"`
 	Std        float64 `json:"std"` // 该SR对的RTT的标准差
 	ProbeId    string  `json:"probe_id"`
 }
@@ -347,7 +348,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			// Sleep until sendTime
 			sleepTime := time.Duration(sendTime-NowUnixMillion()) * time.Millisecond
 			if sleepTime > 0 {
-				log.Info("Sleep time: ", sleepTime)
+				log.Infof("Sleep time: %dms", sleepTime.Milliseconds())
 				time.Sleep(sleepTime)
 			}
 
@@ -387,6 +388,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"real_rtt":         realRtt,
 				"rtt":              record.Rtt,
 				"rtt_diff":         realRtt - int64(record.Rtt),
+				"stt":              record.Stt,
 				"std":              record.Std,
 				"probe_id":         probeId,
 			}); err != nil {

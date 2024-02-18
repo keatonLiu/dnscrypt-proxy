@@ -684,13 +684,19 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		return nil, err
 	}
 
-	if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
-		return nil, err
-	}
-	//dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
-	time.Sleep(timeWait)
-	if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
-		return nil, err
+	if timeWait == 0 {
+		if _, err := pc.Write(encryptedQuery); err != nil {
+			return nil, err
+		}
+	} else {
+		if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
+			return nil, err
+		}
+		//dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+		time.Sleep(timeWait)
+		if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
+			return nil, err
+		}
 	}
 
 	encryptedResponse, err := ReadPrefixed(&pc)
