@@ -363,14 +363,12 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				//dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 				return
 			}
+			sendTimeDiff := realSendTime - sendTime
 
 			var realArriveTime int64
-			var sendTimeDiff int64
 			if q.Question[0].Qtype == dns.TypeA {
 				realArriveTime = 0
-				sendTimeDiff = 0
 			} else {
-				sendTimeDiff = realSendTime - sendTime
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
