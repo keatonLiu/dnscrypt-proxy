@@ -1041,7 +1041,6 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 
 	relay := proxy.GetRelayByName(relayName)
 	if relay == nil {
-		dlog.Warnf("Relay [%s] not found", relayName)
 		err = fmt.Errorf("relay [%s] not found", relayName)
 		return
 	}
@@ -1069,7 +1068,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 		return resp, rtt, err
 	}
 	resp = &dns.Msg{}
-	resp.Unpack(response)
+	err = resp.Unpack(response)
 	//fmt.Println(resp.String())
 	return resp, rtt, err
 }

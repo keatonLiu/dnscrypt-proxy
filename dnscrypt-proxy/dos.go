@@ -266,6 +266,16 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 	wg.Wait()
 }
 
+type PrepareListRecord struct {
+	Server      string  `json:"server"`
+	Relay       string  `json:"relay"`
+	SendTime    int32   `json:"send_time"`
+	ArrivalTime int32   `json:"arrival_time"`
+	RTT         float64 `json:"rtt"`
+	Std         float64 `json:"std"` // 该SR对的RTT的标准差
+	ProbeId     string  `json:"probe_id"`
+}
+
 func (app *App) dos(qtype uint16, multiLevel bool) {
 	ctx := context.Background()
 	// creat mongodb client
@@ -277,21 +287,22 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	// find latest probe
 	collection := client.Database("odns").Collection("prepare")
 	result := collection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
-	var latestProbe bson.M
+	var latestProbe *PrepareListRecord
 	err = result.Decode(&latestProbe)
 	if latestProbe == nil {
 		dlog.Errorf("Unable to find latest probe, err:%v", err)
 		return
 	}
 
-	probeId := latestProbe["probe_id"].(string)
+	probeId := latestProbe.ProbeId
 	// find all with latest probe_id
-	cursor, err := collection.Find(ctx, bson.M{"probe_id": probeId}, options.Find().SetSort(bson.D{{"send_time", 1}}))
+	cursor, err := collection.Find(ctx, bson.M{"probe_id": probeId}, options.Find().
+		SetSort(bson.D{{"send_time", 1}}))
 	if err != nil {
 		dlog.Errorf("Unable to find probe_id: %v, err: %v", probeId, err)
 		return
 	}
-	var prepareList []bson.M
+	var prepareList []*PrepareListRecord
 	if err = cursor.All(ctx, &prepareList); err != nil {
 		dlog.Errorf("Unable to find prepareList: %v", err)
 		return
@@ -316,15 +327,15 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	for i, record := range prepareList {
 		recordCopy := record
 
-		go func(record bson.M, index int) {
+		go func(record *PrepareListRecord, index int) {
 			defer wg.Done()
 
-			server := record["server"].(string)
-			relay := record["relay"].(string)
-			sendTime := int64(record["send_time"].(int32)) + offset
-			arriveTime := int64(record["arrival_time"].(int32)) + offset
-			rtt := record["rtt"].(float64)
-			std := record["std"].(float64)
+			server := record.Server
+			relay := record.Relay
+			sendTime := int64(record.SendTime) + offset
+			arriveTime := int64(record.ArrivalTime) + offset
+			rtt := record.RTT
+			std := record.Std
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			q := app.buildQuery(server, relay, qtype, multiLevel)
