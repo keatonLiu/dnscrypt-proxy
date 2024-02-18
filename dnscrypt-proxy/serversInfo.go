@@ -338,7 +338,7 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 	if candidateRtt < currentActiveRtt {
 		serversInfo.inner[candidate], serversInfo.inner[currentActive] = serversInfo.inner[currentActive], serversInfo.inner[candidate]
 		dlog.Debugf(
-			"New preferred candidate: %s (RTT: %d vs previous: %d)",
+			"New preferred candidate: %s (Rtt: %d vs previous: %d)",
 			serversInfo.inner[currentActive].Name,
 			int(candidateRtt),
 			int(currentActiveRtt),
@@ -348,7 +348,7 @@ func (serversInfo *ServersInfo) estimatorUpdate(currentActive int) {
 		if time.Since(serversInfo.inner[candidate].lastActionTS) > time.Duration(1*time.Minute) {
 			serversInfo.inner[candidate].rtt.Add(candidateRtt / 2.0)
 			dlog.Debugf(
-				"Giving a new chance to candidate [%s], lowering its RTT from %d to %d (best: %d)",
+				"Giving a new chance to candidate [%s], lowering its Rtt from %d to %d (best: %d)",
 				serversInfo.inner[candidate].Name,
 				int(candidateRtt),
 				int(serversInfo.inner[candidate].rtt.Value()),
@@ -378,7 +378,7 @@ func (serversInfo *ServersInfo) getOne() *ServerInfo {
 		serversInfo.estimatorUpdate(candidate)
 	}
 	serverInfo := serversInfo.inner[candidate]
-	dlog.Debugf("Using candidate [%s] RTT: %d", serverInfo.Name, int(serverInfo.rtt.Value()))
+	dlog.Debugf("Using candidate [%s] Rtt: %d", serverInfo.Name, int(serverInfo.rtt.Value()))
 	serversInfo.Unlock()
 
 	return serverInfo

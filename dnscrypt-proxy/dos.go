@@ -84,31 +84,7 @@ type SRPair struct {
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
-	// Iterate through all servers and relays
-	servers := app.proxy.serversInfo.inner
-	relays := app.proxy.registeredRelays
-	k := GCD(len(servers), len(relays))
-
-	srList := make([]SRPair, 0)
-
-	for start := 0; start < k; start++ {
-		i, j := 0, start
-		for {
-			srList = append(srList, SRPair{
-				Server: servers[i].Name,
-				Relay:  relays[j].getName(),
-			})
-
-			i = (i + 1) % len(servers)
-			j = (j + 1) % len(relays)
-
-			if i == 0 && j == start {
-				break
-			}
-		}
-	}
-
-	log.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
+	servers, relays, srList := app.buildSRList()
 
 	collection := app.mongoClient.Database("odns").Collection("probe")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
@@ -118,7 +94,6 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		log.Warnf("Unable to create index: %v", err)
 	}
 
-	failTimes := 0
 	maxFailTimes := 5
 	repeatProbeTimes := 10
 	groupSize := min(len(servers), len(relays))
@@ -157,12 +132,14 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					wg.Done()
 				}()
 
+				failTimes := 0
 				for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
 					if stats.Running == false {
 						return
 					}
 
 					if stats.CurrentCount.Load() >= int32(limit) {
+						dlog.Infof("Reach limit: %d", limit)
 						return
 					}
 
@@ -191,12 +168,12 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						failTimes = 0
 					}
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
-					txtData, err := base64.StdEncoding.DecodeString(txtDataEncoded)
-					txtResp := &ResolveResponseTXTBody{}
+					txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
+					var txtResp *ResolveResponseTXTBody
 					_ = json.Unmarshal(txtData, txtResp)
 
 					// Save to mongodb
-					_, err = collection.InsertOne(context.Background(), bson.M{
+					_, err = collection.InsertOne(context.TODO(), bson.M{
 						"server":      server,
 						"relay":       relay,
 						"recv_ip":     txtResp.RecvIp.IP,
@@ -222,6 +199,35 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		}
 	}
 	wg.Wait()
+}
+
+func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
+	// Iterate through all servers and relays
+	servers := app.proxy.serversInfo.inner
+	relays := app.proxy.registeredRelays
+	k := GCD(len(servers), len(relays))
+
+	srList := make([]SRPair, 0)
+
+	for start := 0; start < k; start++ {
+		i, j := 0, start
+		for {
+			srList = append(srList, SRPair{
+				Server: servers[i].Name,
+				Relay:  relays[j].getName(),
+			})
+
+			i = (i + 1) % len(servers)
+			j = (j + 1) % len(relays)
+
+			if i == 0 && j == start {
+				break
+			}
+		}
+	}
+
+	log.Debugf("Servers: %d, Relays: %d, Pairs: %d", len(servers), len(relays), len(srList))
+	return servers, relays, srList
 }
 
 func (app *App) randomQueryTest(num int, qtype uint16) {
@@ -267,13 +273,13 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 }
 
 type PrepareListRecord struct {
-	Server      string  `json:"server"`
-	Relay       string  `json:"relay"`
-	SendTime    int32   `json:"send_time"`
-	ArrivalTime int32   `json:"arrival_time"`
-	RTT         float64 `json:"rtt"`
-	Std         float64 `json:"std"` // 该SR对的RTT的标准差
-	ProbeId     string  `json:"probe_id"`
+	Server     string  `json:"server"`
+	Relay      string  `json:"relay"`
+	SendTime   int32   `json:"send_time"`
+	ArriveTime int32   `json:"arrive_time"`
+	Rtt        float64 `json:"rtt"`
+	Std        float64 `json:"std"` // 该SR对的RTT的标准差
+	ProbeId    string  `json:"probe_id"`
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool) {
@@ -333,9 +339,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			server := record.Server
 			relay := record.Relay
 			sendTime := int64(record.SendTime) + offset
-			arriveTime := int64(record.ArrivalTime) + offset
-			rtt := record.RTT
-			std := record.Std
+			arriveTime := int64(record.ArriveTime) + offset
 
 			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
 			q := app.buildQuery(server, relay, qtype, multiLevel)
@@ -350,7 +354,6 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			realSendTime := NowUnixMillion()
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 
-			// Increase totalCount
 			totalCount.Add(1)
 
 			if err != nil || len(resp.Answer) == 0 {
@@ -372,7 +375,6 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				realArriveTime = txtJson.RecvTime
 			}
 
-			// save temp result to local
 			if _, err = collectionResult.InsertOne(ctx, bson.M{
 				"server":           server,
 				"relay":            relay,
@@ -383,9 +385,9 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"real_arrive_time": realArriveTime,
 				"arrive_time_diff": realArriveTime - arriveTime,
 				"real_rtt":         realRtt,
-				"rtt":              rtt,
-				"rtt_diff":         realRtt - int64(rtt),
-				"std":              std,
+				"rtt":              record.Rtt,
+				"rtt_diff":         realRtt - int64(record.Rtt),
+				"std":              record.Std,
 				"probe_id":         probeId,
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
