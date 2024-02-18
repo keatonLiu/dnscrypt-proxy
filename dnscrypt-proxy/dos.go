@@ -170,7 +170,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 					txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 					var txtResp *ResolveResponseTXTBody
-					_ = json.Unmarshal(txtData, txtResp)
+					_ = json.Unmarshal(txtData, &txtResp)
 
 					// Save to mongodb
 					_, err = collection.InsertOne(context.TODO(), bson.M{
