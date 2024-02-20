@@ -184,6 +184,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						"rtt":         rtt,
 						"stt":         txtResp.RecvTime - sendTime,
 						"probe_id":    probeId,
+						"qname":       q.Question[0].Name,
+						"qtype":       q.Question[0].Qtype,
+						"update_time": time.Now().Format("2006-01-02 15:04:05"),
+						"seq":         reqSeq,
 					})
 
 					if err != nil {
@@ -391,6 +395,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"stt":              record.Stt,
 				"std":              record.Std,
 				"probe_id":         probeId,
+				"qname":            q.Question[0].Name,
+				"qtype":            q.Question[0].Qtype,
+				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
+				"index":            index,
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
 			}
