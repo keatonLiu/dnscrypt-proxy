@@ -140,6 +140,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 				// 30次探测 per server-relay pair
 				for k := 0; k < 3; k++ {
 					wg2 := sync.WaitGroup{}
+					wg2.Add(repeatProbeTimes)
 					for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
 						go func() {
 							defer wg2.Done()
