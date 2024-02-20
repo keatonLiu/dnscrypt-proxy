@@ -158,6 +158,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							if err != nil || resp == nil {
 								log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, rtt: %dms", server, relay, err, resp, rtt)
 								stats.FailCount.Add(1)
+								return
 							} else if len(resp.Answer) == 0 {
 								stats.FailCount.Add(1)
 								log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
