@@ -336,6 +336,11 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	// adjust sendTime and arrivalTime
 	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
+
+	if limit == 0 {
+		limit = len(prepareList)
+	}
+
 	wg.Add(min(len(prepareList), limit))
 	for i, record := range prepareList {
 		recordCopy := record

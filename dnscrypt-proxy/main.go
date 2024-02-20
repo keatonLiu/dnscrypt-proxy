@@ -249,7 +249,7 @@ func (app *App) startApi() {
 		})
 
 		r.GET("/dos", func(c *gin.Context) {
-			qtypeStr, _ := c.GetQuery("qtype")
+			qtypeStr := c.Query("qtype")
 			qtype, exists := dns.StringToType[strings.ToUpper(qtypeStr)]
 			if !exists {
 				qtype = dns.TypeA
@@ -257,8 +257,10 @@ func (app *App) startApi() {
 
 			multiLevelStr, exists := c.GetQuery("multiLevel")
 			multiLevel := strings.ToLower(multiLevelStr) == "true"
+			limit := c.Query("limit")
 
-			app.dos(qtype, multiLevel)
+			limitInt, _ := strconv.Atoi(limit)
+			app.dos(qtype, multiLevel, limitInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -448,13 +450,19 @@ func (app *App) startApi() {
 			case "dos":
 				multiLevel := slices.Contains(args, "multi")
 				if len(args) == 0 {
-					app.dos(dns.TypeTXT, multiLevel)
+					app.dos(dns.TypeTXT, multiLevel, 0)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
 						qtype = dns.TypeTXT
 					}
-					app.dos(qtype, multiLevel)
+
+					if len(args) == 2 {
+						limit, _ := strconv.Atoi(args[1])
+						app.dos(qtype, multiLevel, limit)
+					} else {
+						app.dos(qtype, multiLevel, 0)
+					}
 				}
 			}
 		}
