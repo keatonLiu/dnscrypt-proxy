@@ -94,8 +94,6 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		log.Warnf("Unable to create index: %v", err)
 	}
 
-	//maxFailTimes := 3
-	repeatProbeTimes := 10
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
 
@@ -110,7 +108,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	wg.Add(min(iterTime*groupSize, limit))
 
 	stats := app.StatsMap[probeId]
-	totalCount := Min(iterTime*groupSize*repeatProbeTimes, limit*repeatProbeTimes)
+
+	batchSize := 10
+	probeTime := 3
+
+	totalCount := Min(iterTime*groupSize*probeTime*batchSize, limit*probeTime*batchSize)
 	stats.TotalCount.Add(int32(totalCount))
 	stats.Concurrent = maxConcurrent
 	defer func() {
@@ -138,10 +140,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 				}()
 
 				// 30次探测 per server-relay pair
-				for k := 0; k < 3; k++ {
+				for k := 0; k < probeTime; k++ {
 					wg2 := sync.WaitGroup{}
-					wg2.Add(repeatProbeTimes)
-					for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
+					wg2.Add(batchSize)
+					for reqSeq := 0; reqSeq < batchSize; reqSeq++ {
 						go func() {
 							defer wg2.Done()
 
