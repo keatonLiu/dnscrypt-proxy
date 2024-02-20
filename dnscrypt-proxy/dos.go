@@ -185,7 +185,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 						"stt":         txtResp.RecvTime - sendTime,
 						"probe_id":    probeId,
 						"qname":       q.Question[0].Name,
-						"qtype":       q.Question[0].Qtype,
+						"qtype":       dns.TypeToString[q.Question[0].Qtype],
 						"update_time": time.Now().Format("2006-01-02 15:04:05"),
 						"seq":         reqSeq,
 					})
@@ -396,7 +396,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"std":              record.Std,
 				"probe_id":         probeId,
 				"qname":            q.Question[0].Name,
-				"qtype":            q.Question[0].Qtype,
+				"qtype":            dns.TypeToString[q.Question[0].Qtype],
 				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
 				"index":            index,
 			}); err != nil {

@@ -219,7 +219,7 @@ func (app *App) startApi() {
 
 		r.POST("/resolve", func(c *gin.Context) {
 			req := ResolveRequestBody{
-				ServerProtocol: "udp",
+				ServerProtocol: "tcp",
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
