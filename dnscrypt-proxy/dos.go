@@ -396,6 +396,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 			if _, err = collectionResult.InsertOne(ctx, bson.M{
 				"server":           server,
 				"relay":            relay,
+				"multi_level":      multiLevel,
 				"send_time":        sendTime,
 				"real_send_time":   realSendTime,
 				"send_time_diff":   sendTimeDiff,
