@@ -13,7 +13,6 @@ import (
 	"github.com/miekg/dns"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -280,10 +279,6 @@ func (app *App) startApi() {
 			concurrentInt, _ := strconv.Atoi(concurrentStr)
 			multiLevelStr := c.Query("multiLevel")
 			multiLevel := multiLevelStr == "true"
-
-			if limitInt <= 0 {
-				limitInt = math.MaxInt
-			}
 
 			probeId := timeNow().Format("20060102150405")
 			stats := &Stats{

@@ -112,6 +112,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	batchSize := 10
 	probeTime := 3
 
+	if limit <= 0 {
+		limit = iterTime * groupSize
+	}
+
 	totalCount := Min(iterTime*groupSize*probeTime*batchSize, limit*probeTime*batchSize)
 	stats.TotalCount.Add(int32(totalCount))
 	stats.Concurrent = maxConcurrent
@@ -341,7 +345,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
 
-	if limit == 0 {
+	if limit <= 0 {
 		limit = len(prepareList)
 	}
 
