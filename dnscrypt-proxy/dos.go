@@ -104,8 +104,6 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		maxConcurrent = groupSize
 	}
 	countChannel := make(chan struct{}, maxConcurrent)
-	wg := sync.WaitGroup{}
-	wg.Add(min(iterTime*groupSize, limit))
 
 	stats := app.StatsMap[probeId]
 
@@ -115,6 +113,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	if limit <= 0 {
 		limit = iterTime * groupSize
 	}
+	wg := sync.WaitGroup{}
+	wg.Add(min(iterTime*groupSize, limit))
 
 	totalCount := Min(iterTime*groupSize*probeTime*batchSize, limit*probeTime*batchSize)
 	stats.TotalCount.Add(int32(totalCount))
