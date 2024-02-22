@@ -261,7 +261,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
-				json.Unmarshal(txtData, txtJson)
+				_ = json.Unmarshal(txtData, txtJson)
 				realArrivalTime = txtJson.RecvTime
 				realResolverAddr = net.JoinHostPort(txtJson.RecvIp.IP, strconv.Itoa(txtJson.RecvIp.Port))
 			}
