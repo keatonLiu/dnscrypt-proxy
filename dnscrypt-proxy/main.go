@@ -13,7 +13,6 @@ import (
 	"github.com/miekg/dns"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -219,7 +218,7 @@ func (app *App) startApi() {
 
 		r.POST("/resolve", func(c *gin.Context) {
 			req := ResolveRequestBody{
-				ServerProtocol: "udp",
+				ServerProtocol: "tcp",
 			}
 			if err := c.ShouldBindJSON(&req); err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{
@@ -249,7 +248,7 @@ func (app *App) startApi() {
 		})
 
 		r.GET("/dos", func(c *gin.Context) {
-			qtypeStr, _ := c.GetQuery("qtype")
+			qtypeStr := c.Query("qtype")
 			qtype, exists := dns.StringToType[strings.ToUpper(qtypeStr)]
 			if !exists {
 				qtype = dns.TypeA
@@ -257,8 +256,10 @@ func (app *App) startApi() {
 
 			multiLevelStr, exists := c.GetQuery("multiLevel")
 			multiLevel := strings.ToLower(multiLevelStr) == "true"
+			limit := c.Query("limit")
 
-			app.dos(qtype, multiLevel)
+			limitInt, _ := strconv.Atoi(limit)
+			app.dos(qtype, multiLevel, limitInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
@@ -278,10 +279,6 @@ func (app *App) startApi() {
 			concurrentInt, _ := strconv.Atoi(concurrentStr)
 			multiLevelStr := c.Query("multiLevel")
 			multiLevel := multiLevelStr == "true"
-
-			if limitInt <= 0 {
-				limitInt = math.MaxInt
-			}
 
 			probeId := timeNow().Format("20060102150405")
 			stats := &Stats{
@@ -448,13 +445,19 @@ func (app *App) startApi() {
 			case "dos":
 				multiLevel := slices.Contains(args, "multi")
 				if len(args) == 0 {
-					app.dos(dns.TypeTXT, multiLevel)
+					app.dos(dns.TypeTXT, multiLevel, 0)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
 						qtype = dns.TypeTXT
 					}
-					app.dos(qtype, multiLevel)
+
+					if len(args) == 2 {
+						limit, _ := strconv.Atoi(args[1])
+						app.dos(qtype, multiLevel, limit)
+					} else {
+						app.dos(qtype, multiLevel, 0)
+					}
 				}
 			}
 		}

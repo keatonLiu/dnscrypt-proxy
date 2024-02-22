@@ -647,7 +647,8 @@ func (proxy *Proxy) exchangeWithTCPServer(
 	encryptedQuery []byte,
 	clientNonce []byte,
 ) ([]byte, error) {
-	return proxy.exchangeWithTCPServerWithTimeWait(serverInfo, sharedKey, encryptedQuery, clientNonce, 0)
+	bytes, _, err := proxy.exchangeWithTCPServerWithTimeWait(serverInfo, sharedKey, encryptedQuery, clientNonce, 0)
+	return bytes, err
 }
 
 func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
@@ -656,7 +657,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedQuery []byte,
 	clientNonce []byte,
 	timeWait time.Duration,
-) ([]byte, error) {
+) ([]byte, int64, error) {
 	upstreamAddr := serverInfo.TCPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
@@ -670,40 +671,43 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer pc.Close()
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
 	}
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
+	start := timeNow()
 	if timeWait == 0 {
 		if _, err := pc.Write(encryptedQuery); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	} else {
 		if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		//dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-
 	encryptedResponse, err := ReadPrefixed(&pc)
+	rtt := time.Since(start).Milliseconds()
+
 	if err != nil {
-		return nil, err
+		return nil, rtt, err
 	}
-	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+	bytes, err := proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+	return bytes, rtt, err
 }
 
 func (proxy *Proxy) clientsCountInc() bool {
@@ -1064,9 +1068,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 	if serverProto == "udp" {
 		response, rtt, err = proxy.exchangeWithUDPServerOnce(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
 	} else {
-		start := time.Now()
-		response, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
-		rtt = time.Since(start).Milliseconds()
+		response, rtt, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
 	}
 
 	if err != nil {

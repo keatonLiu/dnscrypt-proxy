@@ -94,8 +94,6 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		log.Warnf("Unable to create index: %v", err)
 	}
 
-	maxFailTimes := 3
-	repeatProbeTimes := 10
 	groupSize := min(len(servers), len(relays))
 	iterTime := max(len(servers), len(relays))
 
@@ -106,11 +104,19 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 		maxConcurrent = groupSize
 	}
 	countChannel := make(chan struct{}, maxConcurrent)
+
+	stats := app.StatsMap[probeId]
+
+	batchSize := 10
+	probeTime := 3
+
+	if limit <= 0 {
+		limit = iterTime * groupSize
+	}
 	wg := sync.WaitGroup{}
 	wg.Add(min(iterTime*groupSize, limit))
 
-	stats := app.StatsMap[probeId]
-	totalCount := Min(iterTime*groupSize*repeatProbeTimes, limit*repeatProbeTimes)
+	totalCount := Min(iterTime*groupSize*probeTime*batchSize, limit*probeTime*batchSize)
 	stats.TotalCount.Add(int32(totalCount))
 	stats.Concurrent = maxConcurrent
 	defer func() {
@@ -137,63 +143,69 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 					wg.Done()
 				}()
 
-				failTimes := 0
-				for reqSeq := 0; reqSeq < repeatProbeTimes; reqSeq++ {
-					if stats.Running == false {
-						return
+				// 30次探测 per server-relay pair
+				for k := 0; k < probeTime; k++ {
+					wg2 := sync.WaitGroup{}
+					wg2.Add(batchSize)
+					for reqSeq := 0; reqSeq < batchSize; reqSeq++ {
+						go func() {
+							defer wg2.Done()
+
+							if stats.Running == false {
+								return
+							}
+
+							// Send query
+							q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
+
+							sendTime := NowUnixMillion()
+							resp, rtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+
+							stats.CurrentCount.Add(1)
+							if err != nil || resp == nil {
+								log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, rtt: %dms", server, relay, err, resp, rtt)
+								stats.FailCount.Add(1)
+								return
+							} else if len(resp.Answer) == 0 {
+								stats.FailCount.Add(1)
+								log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
+								return
+							}
+
+							txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+							txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
+							var txtResp *ResolveResponseTXTBody
+							_ = json.Unmarshal(txtData, &txtResp)
+
+							// Save to mongodb
+							_, err = collection.InsertOne(context.TODO(), bson.M{
+								"server":      server,
+								"relay":       relay,
+								"recv_ip":     txtResp.RecvIp.IP,
+								"recv_port":   txtResp.RecvIp.Port,
+								"send_time":   sendTime,
+								"recv_time":   txtResp.RecvTime,
+								"multi_level": multiLevel,
+								"rtt":         rtt,
+								"stt":         txtResp.RecvTime - sendTime,
+								"probe_id":    probeId,
+								"qname":       q.Question[0].Name,
+								"qtype":       dns.TypeToString[q.Question[0].Qtype],
+								"update_time": time.Now().Format("2006-01-02 15:04:05"),
+								"batch":       k,
+							})
+
+							if err != nil {
+								log.Warnf("Unable to save to mongodb: %v", err)
+							}
+
+							stats.SuccessCount.Add(1)
+
+							log.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
+								stats.TotalCount.Load(), server, relay, rtt)
+						}()
 					}
-
-					// Send query
-					q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
-
-					sendTime := NowUnixMillion()
-					resp, rtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
-
-					stats.CurrentCount.Add(1)
-					if err != nil || resp == nil {
-						log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, rtt: %dms", server, relay, err, resp, rtt)
-						failTimes += 1
-						stats.FailCount.Add(1)
-						if failTimes > maxFailTimes {
-							break
-						} else {
-							reqSeq--
-							continue
-						}
-					} else if len(resp.Answer) == 0 {
-						stats.FailCount.Add(1)
-						log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
-						break
-					} else {
-						failTimes = 0
-					}
-					txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
-					txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
-					var txtResp *ResolveResponseTXTBody
-					_ = json.Unmarshal(txtData, &txtResp)
-
-					// Save to mongodb
-					_, err = collection.InsertOne(context.TODO(), bson.M{
-						"server":      server,
-						"relay":       relay,
-						"recv_ip":     txtResp.RecvIp.IP,
-						"recv_port":   txtResp.RecvIp.Port,
-						"send_time":   sendTime,
-						"recv_time":   txtResp.RecvTime,
-						"multi_level": multiLevel,
-						"rtt":         rtt,
-						"stt":         txtResp.RecvTime - sendTime,
-						"probe_id":    probeId,
-					})
-
-					if err != nil {
-						log.Warnf("Unable to save to mongodb: %v", err)
-					}
-
-					stats.SuccessCount.Add(1)
-
-					log.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
-						stats.TotalCount.Load(), server, relay, rtt)
+					wg2.Wait()
 				}
 			}(server, relay)
 		}
@@ -284,7 +296,7 @@ type PrepareListRecord struct {
 	ProbeId    string  `bson:"probe_id"`
 }
 
-func (app *App) dos(qtype uint16, multiLevel bool) {
+func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	ctx := context.Background()
 	// creat mongodb client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
@@ -332,9 +344,18 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 	// adjust sendTime and arrivalTime
 	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
-	wg.Add(len(prepareList))
+
+	if limit <= 0 {
+		limit = len(prepareList)
+	}
+
+	wg.Add(min(len(prepareList), limit))
 	for i, record := range prepareList {
 		recordCopy := record
+
+		if i >= limit {
+			break
+		}
 
 		go func(record *PrepareListRecord, index int) {
 			defer wg.Done()
@@ -379,6 +400,7 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 			if _, err = collectionResult.InsertOne(ctx, bson.M{
 				"server":           server,
 				"relay":            relay,
+				"multi_level":      multiLevel,
 				"send_time":        sendTime,
 				"real_send_time":   realSendTime,
 				"send_time_diff":   sendTimeDiff,
@@ -391,6 +413,10 @@ func (app *App) dos(qtype uint16, multiLevel bool) {
 				"stt":              record.Stt,
 				"std":              record.Std,
 				"probe_id":         probeId,
+				"qname":            q.Question[0].Name,
+				"qtype":            dns.TypeToString[q.Question[0].Qtype],
+				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
+				"index":            index,
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
 			}
