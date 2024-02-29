@@ -297,6 +297,7 @@ type PrepareListRecord struct {
 	Stt        float64 `bson:"stt"`
 	Std        float64 `bson:"std"` // 该SR对的RTT的标准差
 	ProbeId    string  `bson:"probe_id"`
+	TimeWait   int     `bson:"time_wait"`
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
@@ -387,7 +388,8 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 			}
 
 			realSendTime := NowUnixMillion()
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+			timeWait := time.Duration(record.TimeWait) * time.Millisecond
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
 
 			totalCount.Add(1)
 
