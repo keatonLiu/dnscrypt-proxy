@@ -302,9 +302,9 @@ type PrepareListRecord struct {
 
 func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	ctx := context.Background()
-	filter := bson.D{
-		{"probe_id", bson.D{{"$exists", true}}},
-		{"multi_level", multiLevel},
+	filter := bson.M{
+		"probe_id":    bson.M{"$exists": true},
+		"multi_level": multiLevel,
 	}
 	// creat mongodb client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
@@ -323,9 +323,9 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	}
 
 	probeId := latestProbe.ProbeId
-	filter = bson.D{
-		{"probe_id", probeId},
-		{"multi_level", multiLevel},
+	filter = bson.M{
+		"probe_id":    probeId,
+		"multi_level": multiLevel,
 	}
 	dlog.Infof("Latest probe_id: %v", probeId)
 	// find all with latest probe_id
