@@ -88,7 +88,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 	collection := app.mongoClient.Database("odns").Collection("probe")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
-		Keys: bson.D{{"probe_id", 1}},
+		Keys: bson.D{
+			{"probe_id", 1},
+			{"multi_level", 1},
+		},
 	})
 	if err != nil {
 		log.Warnf("Unable to create index: %v", err)
@@ -298,6 +301,10 @@ type PrepareListRecord struct {
 
 func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	ctx := context.Background()
+	filter := bson.D{
+		{"probe_id", bson.D{{"$exists", true}}},
+		{"multi_level", multiLevel},
+	}
 	// creat mongodb client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
 	if err != nil {
@@ -306,7 +313,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	}
 	// find latest probe
 	collection := client.Database("odns").Collection("prepare")
-	result := collection.FindOne(ctx, bson.D{}, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
+	result := collection.FindOne(ctx, filter, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
 	var latestProbe *PrepareListRecord
 	err = result.Decode(&latestProbe)
 	if latestProbe == nil || err != nil {
@@ -315,9 +322,13 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	}
 
 	probeId := latestProbe.ProbeId
+	filter = bson.D{
+		{"probe_id", probeId},
+		{"multi_level", multiLevel},
+	}
 	dlog.Infof("Latest probe_id: %v", probeId)
 	// find all with latest probe_id
-	cursor, err := collection.Find(ctx, bson.M{"probe_id": probeId}, options.Find().
+	cursor, err := collection.Find(ctx, filter, options.Find().
 		SetSort(bson.D{{"send_time", 1}}))
 	if err != nil {
 		dlog.Errorf("Unable to find probe_id: %v, err: %v", probeId, err)
@@ -332,7 +343,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 
 	// clear result collection
 	collectionResult := client.Database("odns").Collection("result")
-	if _, err := collectionResult.DeleteMany(ctx, bson.M{"probe_id": probeId}); err != nil {
+	if _, err := collectionResult.DeleteMany(ctx, filter); err != nil {
 		dlog.Errorf("Unable to clear collection result: %v", err)
 		return
 	}
