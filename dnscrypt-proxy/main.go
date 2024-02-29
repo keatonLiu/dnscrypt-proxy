@@ -332,6 +332,8 @@ func (app *App) startApi() {
 					var successRate float64
 					if stats.CurrentCount.Load() > 0 {
 						successRate = float64(stats.SuccessCount.Load()) / float64(stats.CurrentCount.Load()) * 100
+						// 保留两位小数
+						successRate, _ = strconv.ParseFloat(fmt.Sprintf("%.2f", successRate), 64)
 					}
 					c.JSON(http.StatusOK, gin.H{
 						"status": 0,
