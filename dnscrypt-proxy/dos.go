@@ -108,7 +108,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	stats := app.StatsMap[probeId]
 
 	batchSize := 10
-	probeTime := 3
+	probeTime := 2
 
 	if limit <= 0 {
 		limit = iterTime * groupSize
