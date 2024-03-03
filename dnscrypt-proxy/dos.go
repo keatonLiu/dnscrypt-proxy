@@ -427,7 +427,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 				"arrive_time_diff": realArriveTime - arriveTime,
 				"real_rtt":         realRtt,
 				"rtt":              record.Rtt,
-				"rtt_diff":         realRtt - int64(record.Rtt),
+				"rtt_diff":         realRtt - int64(record.Rtt+float64(record.TimeWait)),
 				"stt":              record.Stt,
 				"std":              record.Std,
 				"probe_id":         probeId,
