@@ -9,6 +9,7 @@ import (
 	"github.com/jedisct1/dlog"
 	"github.com/miekg/dns"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math/rand"
@@ -289,15 +290,18 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 }
 
 type PrepareListRecord struct {
-	Server     string  `bson:"server"`
-	Relay      string  `bson:"relay"`
-	SendTime   int32   `bson:"send_time"`
-	ArriveTime int32   `bson:"arrive_time"`
-	Rtt        float64 `bson:"rtt"`
-	Stt        float64 `bson:"stt"`
-	Std        float64 `bson:"std"` // 该SR对的RTT的标准差
-	ProbeId    string  `bson:"probe_id"`
-	TimeWait   int     `bson:"time_wait"`
+	Server     string             `bson:"server"`
+	Relay      string             `bson:"relay"`
+	SendTime   int32              `bson:"send_time"`
+	ArriveTime int32              `bson:"arrive_time"`
+	Rtt        float64            `bson:"rtt"`
+	Stt        float64            `bson:"stt"`
+	Std        float64            `bson:"std"` // 该SR对的RTT的标准差
+	ProbeId    string             `bson:"probe_id"`
+	TimeWait   int                `bson:"time_wait"`
+	TotalStt   float64            `bson:"total_stt"`
+	MultiLevel bool               `bson:"multi_level"`
+	UpdateTime primitive.DateTime `bson:"update_time"`
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
@@ -318,7 +322,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	var latestProbe *PrepareListRecord
 	err = result.Decode(&latestProbe)
 	if latestProbe == nil || err != nil {
-		dlog.Errorf("Unable to find latest probe, err:%v", err)
+		dlog.Errorf("Unable to find latest probe multi_level: %v, err: %v", multiLevel, err)
 		return
 	}
 
@@ -388,7 +392,9 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 			}
 
 			realSendTime := NowUnixMillion()
-			timeWait := time.Duration(record.TimeWait) * time.Millisecond
+			sendTimeDiff := realSendTime - sendTime
+
+			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
 			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
 
 			totalCount.Add(1)
@@ -397,7 +403,6 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 				//dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 				return
 			}
-			sendTimeDiff := realSendTime - sendTime
 
 			var realArriveTime int64
 			if q.Question[0].Qtype == dns.TypeA {
