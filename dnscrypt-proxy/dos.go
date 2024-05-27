@@ -60,7 +60,7 @@ func (app *App) buildQuery(server string, relay string, qtype uint16, multiLevel
 	server = server[:min(len(server), 25)]
 	relay = relay[:min(len(relay), 25)]
 
-	domain := fmt.Sprintf("%s,%s,%s.test.xxt.asia", server, relay, RandStringRunes(8))
+	domain := fmt.Sprintf("%s,%s,%s.test.xtt.asia", server, relay, RandStringRunes(8))
 	// add many levels to trigger more query minimization
 	if multiLevel {
 		domain = "a.b.c.d.e.f.g.h.i.j.k.l." + domain
@@ -384,7 +384,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 			sendTime := int64(record.SendTime) + offset
 			arriveTime := int64(record.ArriveTime) + offset
 
-			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xxt.asia
+			// make a query for {server}-{relay}-{#randomStr}-{index}.test.xtt.asia
 			q := app.buildQuery(server, relay, qtype, multiLevel)
 
 			// Sleep until sendTime
