@@ -162,12 +162,10 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							// Send query
 							q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
-							sendTime := NowUnixMillion()
-							resp, rtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
-
+							resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 							stats.CurrentCount.Add(1)
-							if err != nil || resp == nil {
-								log.Warnf("Probe failed: %s,%s, err: %v, resp: %v, rtt: %dms", server, relay, err, resp, rtt)
+							if err != nil || resp == nil || sendTime == nil {
+								log.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
 								stats.FailCount.Add(1)
 								return
 							} else if len(resp.Answer) == 0 {
@@ -175,6 +173,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 								log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
 								return
 							}
+							sendTimeMs := sendTime.UnixMilli()
+							rtt := NowUnixMillion() - sendTimeMs
 
 							txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 							txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
@@ -187,11 +187,11 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 								"relay":       relay,
 								"recv_ip":     txtResp.RecvIp.IP,
 								"recv_port":   txtResp.RecvIp.Port,
-								"send_time":   sendTime,
+								"send_time":   sendTimeMs,
 								"recv_time":   txtResp.RecvTime,
 								"multi_level": multiLevel,
 								"rtt":         rtt,
-								"stt":         txtResp.RecvTime - sendTime,
+								"stt":         txtResp.RecvTime - sendTimeMs,
 								"probe_id":    probeId,
 								"qname":       q.Question[0].Name,
 								"qtype":       dns.TypeToString[q.Question[0].Qtype],
@@ -394,18 +394,19 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 				time.Sleep(sleepTime)
 			}
 
-			realSendTime := NowUnixMillion()
-			sendTimeDiff := realSendTime - sendTime
+			sendTimeDiff := NowUnixMillion() - sendTime
 
 			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
+			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
 
 			totalCount.Add(1)
 
-			if err != nil || len(resp.Answer) == 0 {
+			if err != nil || len(resp.Answer) == 0 || realSendTime == nil {
 				//dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 				return
 			}
+			sendTimeMs := realSendTime.UnixMilli()
+			rtt := NowUnixMillion() - sendTimeMs
 
 			var realArriveTime int64
 			if q.Question[0].Qtype == dns.TypeA {
@@ -423,14 +424,14 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 				"relay":            relay,
 				"multi_level":      multiLevel,
 				"send_time":        sendTime,
-				"real_send_time":   realSendTime,
+				"real_send_time":   sendTimeMs,
 				"send_time_diff":   sendTimeDiff,
 				"arrive_time":      arriveTime,
 				"real_arrive_time": realArriveTime,
 				"arrive_time_diff": realArriveTime - arriveTime,
-				"real_rtt":         realRtt,
+				"real_rtt":         rtt,
 				"rtt":              record.Rtt,
-				"rtt_diff":         realRtt - int64(record.Rtt+float64(record.TimeWait)),
+				"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
 				"stt":              record.Stt,
 				"std":              record.Std,
 				"probe_id":         probeId,
@@ -470,10 +471,10 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 		time.Sleep(time.Duration(sendInterval) * time.Millisecond)
 		go func() {
 			q := app.buildQuery(server, relay, qtype, multiLevel)
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q,
+			resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q,
 				time.Duration(delay)*time.Millisecond)
-			if err != nil {
-				log.Warn(err)
+			if err != nil || sendTime == nil {
+				log.Warnf("err: %v, sendTime: %v", err, sendTime)
 				return
 			}
 
@@ -481,8 +482,9 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 				log.Warn("resp.Answer is empty")
 				return
 			}
+			rtt := NowUnixMillion() - sendTime.UnixMilli()
 
-			log.Info("Current progress: ", delay, "ms, realRtt: ", realRtt-int64(delay), "ms")
+			log.Info("Current progress: ", delay, "ms, realRtt: ", rtt-int64(delay), "ms")
 		}()
 	}
 	log.Info("DOS pending attack finised")

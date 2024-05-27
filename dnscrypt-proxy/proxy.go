@@ -591,7 +591,7 @@ func (proxy *Proxy) exchangeWithUDPServerOnce(
 	sharedKey *[32]byte,
 	encryptedQuery []byte,
 	clientNonce []byte,
-) (resp []byte, rtt int64, err error) {
+) (resp []byte, sendTime *time.Time, err error) {
 	upstreamAddr := serverInfo.UDPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayUDPAddr
@@ -623,7 +623,9 @@ func (proxy *Proxy) exchangeWithUDPServerOnce(
 		dlog.Noticef("Sending query to server: %s directly", serverInfo.Name)
 	}
 
-	start := time.Now()
+	t := time.Now()
+	sendTime = &t
+
 	if _, err = pc.Write(encryptedQuery); err != nil {
 		return
 	}
@@ -631,8 +633,6 @@ func (proxy *Proxy) exchangeWithUDPServerOnce(
 	length, err = pc.Read(encryptedResponse)
 	if err == nil {
 		encryptedResponse = encryptedResponse[:length]
-		rtt = time.Since(start).Milliseconds()
-		dlog.Debugf("[%s] Rtt: %dms\n", serverInfo.Name, rtt)
 	} else {
 		dlog.Debugf("[%v] Failed to resolve", serverInfo.Name)
 	}
@@ -657,12 +657,12 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedQuery []byte,
 	clientNonce []byte,
 	timeWait time.Duration,
-) ([]byte, int64, error) {
+) (bytes []byte, sendTime *time.Time, err error) {
 	upstreamAddr := serverInfo.TCPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
 	}
-	var err error
+
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
@@ -671,43 +671,43 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		pc, err = (*proxyDialer).Dial("tcp", upstreamAddr.String())
 	}
 	if err != nil {
-		return nil, 0, err
+		return
 	}
 	defer pc.Close()
 	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
-		return nil, 0, err
+		return
 	}
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		proxy.prepareForRelay(serverInfo.TCPAddr.IP, serverInfo.TCPAddr.Port, &encryptedQuery)
 	}
 	encryptedQuery, err = PrefixWithSize(encryptedQuery)
 	if err != nil {
-		return nil, 0, err
+		return
 	}
 
-	start := timeNow()
+	t := timeNow()
+	sendTime = &t
 	if timeWait == 0 {
 		if _, err := pc.Write(encryptedQuery); err != nil {
-			return nil, 0, err
+			return
 		}
 	} else {
 		if _, err := pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
-			return nil, 0, err
+			return
 		}
 		//dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		if _, err := pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
-			return nil, 0, err
+			return
 		}
 	}
 	encryptedResponse, err := ReadPrefixed(&pc)
-	rtt := time.Since(start).Milliseconds()
 
 	if err != nil {
-		return nil, rtt, err
+		return
 	}
-	bytes, err := proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
-	return bytes, rtt, err
+	bytes, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
+	return
 }
 
 func (proxy *Proxy) clientsCountInc() bool {
@@ -1034,12 +1034,12 @@ func (proxy *Proxy) ListAvailableRelays() {
 }
 
 func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
-	relayName string, query *dns.Msg, timeWait time.Duration) (resp *dns.Msg, rtt int64, err error) {
+	relayName string, query *dns.Msg, timeWait time.Duration) (resp *dns.Msg, sendTime *time.Time, err error) {
 
 	queryBytes, err := query.Pack()
 	if err != nil {
 		dlog.Errorf("Unable to pack query: %v, query: %v", err, query)
-		return resp, rtt, err
+		return
 	}
 	var serverInfo *ServerInfo
 	serverInfo = proxy.getServerInfoByName(serverName)
@@ -1061,24 +1061,24 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(&serverInfoCpy, queryBytes, serverProto)
 	if err != nil && serverProto == "udp" {
 		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
-		return resp, rtt, err
+		return
 	}
 
 	var response []byte
 	if serverProto == "udp" {
-		response, rtt, err = proxy.exchangeWithUDPServerOnce(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
+		response, sendTime, err = proxy.exchangeWithUDPServerOnce(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
 	} else {
-		response, rtt, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
+		response, sendTime, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
 	}
 
 	if err != nil {
 		//dlog.Errorf("Unable to resolve query: %v, resp: %v", err, resp)
-		return resp, rtt, err
+		return
 	}
 	resp = &dns.Msg{}
 	err = resp.Unpack(response)
 	//fmt.Println(resp.String())
-	return resp, rtt, err
+	return
 }
 
 func (proxy *Proxy) getServerInfoByName(serverName string) *ServerInfo {
