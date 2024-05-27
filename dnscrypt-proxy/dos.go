@@ -218,6 +218,7 @@ finish:
 	wg.Wait()
 }
 
+// 最小探测负载算法
 func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
 	// Iterate through all servers and relays
 	servers := app.proxy.serversInfo.inner
@@ -302,6 +303,8 @@ type PrepareListRecord struct {
 	TotalStt   float64            `bson:"total_stt"`
 	MultiLevel bool               `bson:"multi_level"`
 	UpdateTime primitive.DateTime `bson:"update_time"`
+	Method     string             `bson:"method"`
+	Pending    bool               `bson:"pending"`
 }
 
 func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
@@ -435,6 +438,8 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 				"qtype":            dns.TypeToString[q.Question[0].Qtype],
 				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
 				"index":            index,
+				"method":           record.Method,
+				"pending":          record.Pending,
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
 			}
