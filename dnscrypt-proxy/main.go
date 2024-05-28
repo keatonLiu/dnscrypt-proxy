@@ -36,7 +36,7 @@ type App struct {
 	proxy       *Proxy
 	flags       *ConfigFlags
 	mongoClient *mongo.Client
-	StatsMap    map[string]*Stats
+	StatsMap    map[string]*Stats // probe_id -> Stats
 }
 
 type Stats struct {
@@ -259,9 +259,10 @@ func (app *App) startApi() {
 			limit := c.Query("limit")
 
 			limitInt, _ := strconv.Atoi(limit)
-			app.dos(qtype, multiLevel, limitInt)
+			result := app.dos(qtype, multiLevel, limitInt)
 			c.JSON(http.StatusOK, gin.H{
-				"msg": "ok",
+				"msg":   "ok",
+				"stats": result,
 			})
 		})
 

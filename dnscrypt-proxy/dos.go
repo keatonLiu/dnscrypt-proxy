@@ -84,6 +84,12 @@ type SRPair struct {
 	Relay  string
 }
 
+type DosResult struct {
+	SuccessCount int     `json:"success_count"`
+	TotalCount   int     `json:"total_count"`
+	SuccessRate  float64 `json:"success_rate"`
+}
+
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
 	servers, relays, srList := app.buildSRList()
 
@@ -307,7 +313,8 @@ type PrepareListRecord struct {
 	Pending    bool               `bson:"pending"`
 }
 
-func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
+func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosResult) {
+	dosResult = &DosResult{}
 	ctx := context.Background()
 	filter := bson.M{
 		"probe_id":    bson.M{"$exists": true},
@@ -453,6 +460,11 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) {
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(prepareList),
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
 	log.Printf("Params: qtype: %s, multiLevel: %v", dns.TypeToString[qtype], multiLevel)
+
+	dosResult.SuccessCount = int(successCount.Load())
+	dosResult.TotalCount = int(totalCount.Load())
+	dosResult.SuccessRate = float64(successCount.Load()) / float64(totalCount.Load())
+	return
 }
 
 func (app *App) dosPending(qtype uint16, multiLevel bool) {
