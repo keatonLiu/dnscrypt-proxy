@@ -674,7 +674,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		return
 	}
 	defer pc.Close()
-	if err := pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
+	if err = pc.SetDeadline(time.Now().Add(serverInfo.Timeout)); err != nil {
 		return
 	}
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
