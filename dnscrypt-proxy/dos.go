@@ -448,6 +448,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				"index":            index,
 				"method":           record.Method,
 				"pending":          record.Pending,
+				"size":             q.Len(),
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
 			}
