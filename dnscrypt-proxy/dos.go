@@ -267,7 +267,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			// build query
 			q := app.buildQuery(server, relay, qtype, false)
 			// send query
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 100*time.Millisecond)
 			if err != nil || resp == nil {
 				log.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
 				return
@@ -404,7 +404,6 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			sendTimeDiff := NowUnixMillion() - sendTime
 
 			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
-			log.Printf("timeWait: %dms", timeWait.Milliseconds())
 			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
 
 			totalCount.Add(1)
