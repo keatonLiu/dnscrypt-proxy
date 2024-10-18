@@ -256,13 +256,10 @@ func (app *App) startApi() {
 
 			multiLevelStr, exists := c.GetQuery("multiLevel")
 			multiLevel := strings.ToLower(multiLevelStr) == "true"
-			pendingStr, exists := c.GetQuery("multiLevel")
-			pending := strings.ToLower(pendingStr) == "true"
-
 			limit := c.Query("limit")
 
 			limitInt, _ := strconv.Atoi(limit)
-			result := app.dos(qtype, multiLevel, pending, limitInt)
+			result := app.dos(qtype, multiLevel, limitInt)
 			c.JSON(http.StatusOK, gin.H{
 				"msg":   "ok",
 				"stats": result,
@@ -450,9 +447,8 @@ func (app *App) startApi() {
 				fmt.Printf("rtt: %dms\n", rtt)
 			case "dos":
 				multiLevel := slices.Contains(args, "multi")
-				pending := slices.Contains(args, "pending")
 				if len(args) == 0 {
-					app.dos(dns.TypeTXT, multiLevel, pending, 0)
+					app.dos(dns.TypeTXT, multiLevel, 0)
 				} else {
 					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
 					if !exists {
@@ -461,9 +457,9 @@ func (app *App) startApi() {
 
 					if len(args) == 2 {
 						limit, _ := strconv.Atoi(args[1])
-						app.dos(qtype, multiLevel, pending, limit)
+						app.dos(qtype, multiLevel, limit)
 					} else {
-						app.dos(qtype, multiLevel, pending, 0)
+						app.dos(qtype, multiLevel, 0)
 					}
 				}
 			}
