@@ -412,6 +412,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				//dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
 				return
 			}
+			log.Printf("here")
 			sendTimeMs := realSendTime.UnixMilli()
 			rtt := NowUnixMillion() - sendTimeMs
 
@@ -452,7 +453,6 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
 				"index":            index,
 				"method":           record.Method,
-				"pending":          record.Pending,
 				"size":             q.Len(),
 			}); err != nil {
 				log.Errorf("Unable to save to mongodb: %v", err)
