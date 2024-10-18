@@ -254,7 +254,7 @@ func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
 	return servers, relays, srList
 }
 
-func (app *App) randomQueryTest(num int, qtype uint16) {
+func (app *App) randomQueryTest(num int, qtype uint16, timeWaitMillion int) {
 	wg := sync.WaitGroup{}
 	wg.Add(num)
 	for i := 0; i < num; i++ {
@@ -267,7 +267,7 @@ func (app *App) randomQueryTest(num int, qtype uint16) {
 			// build query
 			q := app.buildQuery(server, relay, qtype, false)
 			// send query
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, 100*time.Millisecond)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(timeWaitMillion)*time.Millisecond)
 			if err != nil || resp == nil {
 				log.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
 				return

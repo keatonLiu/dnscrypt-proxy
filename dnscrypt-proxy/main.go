@@ -370,7 +370,11 @@ func (app *App) startApi() {
 			if !exists {
 				qtype = dns.TypeA
 			}
-			go app.randomQueryTest(numInt, qtype)
+			millionSeconds := 0
+			if millionSecondsStr, exists := c.GetQuery("milliseconds"); exists {
+				millionSeconds, _ = strconv.Atoi(millionSecondsStr)
+			}
+			go app.randomQueryTest(numInt, qtype, millionSeconds)
 			c.JSON(http.StatusOK, gin.H{
 				"msg": "ok",
 			})
