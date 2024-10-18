@@ -409,7 +409,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			totalCount.Add(1)
 
 			if err != nil || len(resp.Answer) == 0 || realSendTime == nil {
-				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, realRtt: %dms", server, relay, err, resp, realRtt)
+				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait)
 				return
 			}
 			log.Printf("here")
