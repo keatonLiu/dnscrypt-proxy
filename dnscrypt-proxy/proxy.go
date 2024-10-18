@@ -695,9 +695,9 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 			return
 		}
-		dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
-		dlog.Debugf("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
+		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			return
 		}
@@ -1061,7 +1061,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 
 	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(&serverInfoCpy, queryBytes, serverProto)
 	if err != nil && serverProto == "udp" {
-		dlog.Debug("Unable to pad for UDP, re-encrypting query for TCP")
+		dlog.Warnf("Unable to pad for UDP, re-encrypting query for TCP")
 		return
 	}
 

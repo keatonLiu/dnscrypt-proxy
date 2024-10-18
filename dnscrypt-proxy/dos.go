@@ -211,7 +211,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 							stats.SuccessCount.Add(1)
 
-							dlog.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
+							dlog.Noticef("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
 								stats.TotalCount.Load(), server, relay, rtt)
 						}()
 					}
