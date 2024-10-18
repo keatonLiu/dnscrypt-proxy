@@ -404,7 +404,8 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			sendTimeDiff := NowUnixMillion() - sendTime
 
 			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
-			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+			log.Printf("timeWait: %dms", timeWait.Milliseconds())
+			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
 
 			totalCount.Add(1)
 
