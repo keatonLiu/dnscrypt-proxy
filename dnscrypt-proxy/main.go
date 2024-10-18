@@ -371,7 +371,7 @@ func (app *App) startApi() {
 				qtype = dns.TypeA
 			}
 			millionSeconds := 0
-			if millionSecondsStr, exists := c.GetQuery("milliseconds"); exists {
+			if millionSecondsStr, exists := c.GetQuery("wait"); exists {
 				millionSeconds, _ = strconv.Atoi(millionSecondsStr)
 			}
 			go app.randomQueryTest(numInt, qtype, millionSeconds)
