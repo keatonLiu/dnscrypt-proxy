@@ -425,6 +425,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				err = json.Unmarshal(txtData, txtJson)
 				if err != nil {
 					log.Warnf("Unable to decode txtData: %v", err)
+					log.Printf("txtData: %s", txtData)
 					return
 				}
 				realArriveTime = txtJson.RecvTime
