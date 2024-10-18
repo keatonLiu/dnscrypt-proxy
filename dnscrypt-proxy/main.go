@@ -297,7 +297,7 @@ func (app *App) startApi() {
 
 		r.GET("/probeDelay", func(c *gin.Context) {
 			probeId := timeNow().Format("20060102150405")
-			go app.probeDelay(probeId)
+			go app.probeDelay()
 			c.JSON(http.StatusOK, gin.H{
 				"probe_id": probeId,
 				"msg":      "ok",
