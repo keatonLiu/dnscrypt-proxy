@@ -244,7 +244,7 @@ func (app *App) probeDelay(probeId string) {
 		relay := relay.name
 		go func() {
 			defer wg.Done()
-			for delay := 9000; delay >= 1000; delay -= 1000 {
+			for delay := 10000; delay >= 1000; delay -= 1000 {
 				server := servers[serverIndex].Name
 				serverIndex = (serverIndex + 1) % len(servers)
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
