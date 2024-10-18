@@ -397,7 +397,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			// Sleep until sendTime
 			sleepTime := time.Duration(sendTime-NowUnixMillion()) * time.Millisecond
 			if sleepTime > 0 {
-				log.Infof("Sleep time: %dms", sleepTime.Milliseconds())
+				//log.Infof("Sleep time: %dms", sleepTime.Milliseconds())
 				time.Sleep(sleepTime)
 			}
 
@@ -422,7 +422,11 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
 				txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
 				txtJson := &ResolveResponseTXTBody{}
-				_ = json.Unmarshal(txtData, txtJson)
+				err = json.Unmarshal(txtData, txtJson)
+				if err != nil {
+					log.Warnf("Unable to decode txtData: %v", err)
+					return
+				}
 				realArriveTime = txtJson.RecvTime
 			}
 
