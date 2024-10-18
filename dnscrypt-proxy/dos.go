@@ -409,10 +409,10 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			totalCount.Add(1)
 
 			if err != nil || len(resp.Answer) == 0 || realSendTime == nil {
-				log.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
+				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
 				return
 			}
-			log.Printf("here")
+			dlog.Noticef("here")
 			sendTimeMs := realSendTime.UnixMilli()
 			rtt := NowUnixMillion() - sendTimeMs
 
@@ -425,8 +425,8 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				txtJson := &ResolveResponseTXTBody{}
 				err = json.Unmarshal(txtData, txtJson)
 				if err != nil {
-					log.Warnf("Unable to decode txtData: %v", err)
-					log.Printf("txtData: %s", txtData)
+					dlog.Warnf("Unable to decode txtData: %v", err)
+					dlog.Warnf("txtData: %s", txtData)
 					return
 				}
 				realArriveTime = txtJson.RecvTime
