@@ -265,9 +265,10 @@ func (app *App) probeDelay() {
 				if dir == -1 { // 递减方向成功，退出
 					maxDelay = curDelay
 					break
-				} else if dir == 0 { // 初始成功，则向上探测
+				} else if dir == 0 || dir == 1 { // 初始成功，则向上探测
 					curDelay += 1000
 					dir = 1 // 转为递增方向
+					dlog.Noticef("转为递增方向, curDelay: %dms", curDelay)
 				}
 			}
 			if maxDelay != 0 {
