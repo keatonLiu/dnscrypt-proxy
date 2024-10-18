@@ -5,7 +5,6 @@ import (
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"fmt"
-	"github.com/charmbracelet/log"
 	"math/rand"
 	"net"
 	"os"
@@ -696,9 +695,9 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 			return
 		}
-		log.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+		dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
-		log.Debugf("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
+		dlog.Debugf("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			return
 		}

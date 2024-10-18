@@ -171,12 +171,12 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
 							stats.CurrentCount.Add(1)
 							if err != nil || resp == nil || sendTime == nil {
-								log.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
+								dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
 								stats.FailCount.Add(1)
 								return
 							} else if len(resp.Answer) == 0 {
 								stats.FailCount.Add(1)
-								log.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
+								dlog.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
 								return
 							}
 							sendTimeMs := sendTime.UnixMilli()
@@ -206,12 +206,12 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							})
 
 							if err != nil {
-								log.Warnf("Unable to save to mongodb: %v", err)
+								dlog.Warnf("Unable to save to mongodb: %v", err)
 							}
 
 							stats.SuccessCount.Add(1)
 
-							log.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
+							dlog.Infof("[%s] [%d/%d]Probe success: %s,%s, rtt: %dms", probeId, stats.CurrentCount.Load(),
 								stats.TotalCount.Load(), server, relay, rtt)
 						}()
 					}
