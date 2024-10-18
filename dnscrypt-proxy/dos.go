@@ -224,6 +224,53 @@ finish:
 	wg.Wait()
 }
 
+// Probe the max client side timeout of a relay, namely the max delay time
+func (app *App) probeDelay(probeId string) {
+	servers := app.proxy.serversInfo.inner
+	relays := app.proxy.registeredRelays
+	collection := app.mongoClient.Database("odns").Collection("delay")
+	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
+		Keys: bson.D{
+			{"probe_id", 1},
+		},
+	})
+	if err != nil {
+		log.Warnf("Unable to create index: %v", err)
+	}
+	serverIndex := 0
+	wg := sync.WaitGroup{}
+	wg.Add(len(relays))
+	for _, relay := range relays {
+		relay := relay.name
+		go func() {
+			defer wg.Done()
+			for delay := 9000; delay >= 1000; delay -= 1000 {
+				server := servers[serverIndex].Name
+				serverIndex = (serverIndex + 1) % len(servers)
+				q := app.buildQuery(server, relay, dns.TypeTXT, false)
+				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(delay)*time.Millisecond)
+				if err != nil || resp == nil || sendTime == nil {
+					dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
+					continue
+				} else if len(resp.Answer) == 0 {
+					continue
+				}
+				dlog.Noticef("Probe success: %s, delay: %dms", relay, NowUnixMillion())
+				// Save to mongodb
+				_, err = collection.InsertOne(context.TODO(), bson.M{
+					"probe_id":    probeId,
+					"relay":       relay,
+					"delay":       delay,
+					"update_time": time.Now().Format("2006-01-02 15:04:05"),
+				})
+				break
+			}
+		}()
+	}
+	wg.Wait()
+	dlog.Noticef("Probe delay finished")
+}
+
 // 最小探测负载算法
 func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
 	// Iterate through all servers and relays

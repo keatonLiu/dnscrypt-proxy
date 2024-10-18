@@ -295,6 +295,15 @@ func (app *App) startApi() {
 			})
 		})
 
+		r.GET("/probeDelay", func(c *gin.Context) {
+			probeId := timeNow().Format("20060102150405")
+			go app.probeDelay(probeId)
+			c.JSON(http.StatusOK, gin.H{
+				"probe_id": probeId,
+				"msg":      "ok",
+			})
+		})
+
 		r.GET("/probe/stop", func(c *gin.Context) {
 			probeId := c.Query("probe_id")
 			if probeId == "" {
