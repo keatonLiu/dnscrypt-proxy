@@ -225,13 +225,13 @@ finish:
 }
 
 // Probe the max client side timeout of a relay, namely the max delay time
-func (app *App) probeDelay(probeId string) {
+func (app *App) probeDelay() {
 	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
 	collection := app.mongoClient.Database("odns").Collection("delay")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
 		Keys: bson.D{
-			{"probe_id", 1},
+			{"relay", 1},
 		},
 	})
 	if err != nil {
@@ -257,12 +257,13 @@ func (app *App) probeDelay(probeId string) {
 				}
 				dlog.Noticef("Probe success: %s, delay: %dms", relay, NowUnixMillion())
 				// Save to mongodb
-				_, err = collection.InsertOne(context.TODO(), bson.M{
-					"probe_id":    probeId,
-					"relay":       relay,
-					"delay":       delay,
-					"update_time": time.Now().Format("2006-01-02 15:04:05"),
-				})
+				opts := options.Update().SetUpsert(true)
+				filter := bson.D{{"relay", relay}}
+				update := bson.D{{"$set", bson.D{
+					{"delay", delay},
+					{"update_time", time.Now().Format("2006-01-02 15:04:05")},
+				}}}
+				_, err = collection.UpdateOne(context.TODO(), filter, update, opts)
 				break
 			}
 		}()
