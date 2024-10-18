@@ -244,27 +244,41 @@ func (app *App) probeDelay() {
 		relay := relay.name
 		go func() {
 			defer wg.Done()
-			for delay := 10000; delay >= 1000; delay -= 1000 {
+			maxDelay := 0
+			curDelay := 9000
+			dir := 0
+			for {
 				server := servers[serverIndex].Name
 				serverIndex = (serverIndex + 1) % len(servers)
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
-				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(delay)*time.Millisecond)
-				if err != nil || resp == nil || sendTime == nil {
+				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(curDelay)*time.Millisecond)
+				if err != nil || resp == nil || sendTime == nil || len(resp.Answer) == 0 {
 					dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
-					continue
-				} else if len(resp.Answer) == 0 {
+					curDelay -= 1000
+					if dir == 1 { // 递增方向失败，退出
+						break
+					}
+					dir = -1
 					continue
 				}
 				dlog.Noticef("Probe success: %s, delay: %dms", relay, NowUnixMillion())
+				if dir == -1 { // 递减方向成功，退出
+					maxDelay = curDelay
+					break
+				} else if dir == 0 { // 初始成功，则向上探测
+					curDelay += 1000
+					dir = 1 // 转为递增方向
+				}
+			}
+			if maxDelay != 0 {
 				// Save to mongodb
 				opts := options.Update().SetUpsert(true)
 				filter := bson.D{{"relay", relay}}
 				update := bson.D{{"$set", bson.D{
-					{"delay", delay},
+					{"delay", maxDelay},
 					{"update_time", time.Now().Format("2006-01-02 15:04:05")},
 				}}}
 				_, err = collection.UpdateOne(context.TODO(), filter, update, opts)
-				break
 			}
 		}()
 	}
