@@ -242,7 +242,7 @@ func (app *App) probeDelay() {
 		relay := relay.name
 		go func() {
 			defer wg.Done()
-			for delay := 9000; delay > 0; delay -= 1000 {
+			for delay := 10000; delay > 0; delay -= 1000 {
 				server := app.proxy.serversInfo.getOne().Name
 				//server := app.proxy.serversInfo.inner[0].Name
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
