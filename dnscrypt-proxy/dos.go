@@ -248,6 +248,9 @@ func (app *App) probeDelay() {
 			curDelay := 9000
 			dir := 0
 			for {
+				if curDelay == 0 {
+					break
+				}
 				server := servers[serverIndex].Name
 				serverIndex = (serverIndex + 1) % len(servers)
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
