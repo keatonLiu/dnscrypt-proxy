@@ -249,7 +249,8 @@ func (app *App) probeDelay() {
 				if curDelay == 0 {
 					break
 				}
-				server := app.proxy.serversInfo.getOne().Name
+				//server := app.proxy.serversInfo.getOne().Name
+				server := app.proxy.serversInfo.inner[0].Name
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
 				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(curDelay)*time.Millisecond)
 				if err != nil || resp == nil || sendTime == nil || len(resp.Answer) == 0 {
@@ -261,7 +262,7 @@ func (app *App) probeDelay() {
 					dir = -1
 					continue
 				}
-				dlog.Noticef("Probe success: %s, delay: %dms", relay, NowUnixMillion())
+				dlog.Noticef("Probe success, server: %s, relay: %s, delay: %dms", server, relay, NowUnixMillion())
 				if dir == -1 { // 递减方向成功，退出
 					maxDelay = curDelay
 					break
