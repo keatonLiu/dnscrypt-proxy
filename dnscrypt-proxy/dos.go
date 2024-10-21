@@ -226,7 +226,6 @@ finish:
 
 // Probe the max client side timeout of a relay, namely the max delay time
 func (app *App) probeDelay() {
-	servers := app.proxy.serversInfo.inner
 	relays := app.proxy.registeredRelays
 	collection := app.mongoClient.Database("odns").Collection("delay")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
@@ -237,7 +236,6 @@ func (app *App) probeDelay() {
 	if err != nil {
 		log.Warnf("Unable to create index: %v", err)
 	}
-	serverIndex := 0
 	wg := sync.WaitGroup{}
 	wg.Add(len(relays))
 	for _, relay := range relays {
@@ -251,8 +249,7 @@ func (app *App) probeDelay() {
 				if curDelay == 0 {
 					break
 				}
-				server := servers[serverIndex].Name
-				serverIndex = (serverIndex + 1) % len(servers)
+				server := app.proxy.serversInfo.getOne().Name
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
 				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(curDelay)*time.Millisecond)
 				if err != nil || resp == nil || sendTime == nil || len(resp.Answer) == 0 {
@@ -274,16 +271,14 @@ func (app *App) probeDelay() {
 					dlog.Noticef("转为递增方向, curDelay: %dms", curDelay)
 				}
 			}
-			if maxDelay != 0 {
-				// Save to mongodb
-				opts := options.Update().SetUpsert(true)
-				filter := bson.D{{"relay", relay}}
-				update := bson.D{{"$set", bson.D{
-					{"delay", maxDelay},
-					{"update_time", time.Now().Format("2006-01-02 15:04:05")},
-				}}}
-				_, err = collection.UpdateOne(context.TODO(), filter, update, opts)
-			}
+			// Save to mongodb
+			opts := options.Update().SetUpsert(true)
+			filter := bson.D{{"relay", relay}}
+			update := bson.D{{"$set", bson.D{
+				{"delay", maxDelay},
+				{"update_time", time.Now().Format("2006-01-02 15:04:05")},
+			}}}
+			_, err = collection.UpdateOne(context.TODO(), filter, update, opts)
 		}()
 	}
 	wg.Wait()
