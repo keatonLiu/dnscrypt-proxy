@@ -692,13 +692,13 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			return
 		}
 	} else {
-		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-8]); err != nil {
+		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 			return
 		}
-		dlog.Noticef("Wait %vms before sending last 8 bytes", timeWait.Milliseconds())
+		dlog.Noticef("Wait %vms before sending last 82 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
-		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-8:]); err != nil {
+		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			return
 		}
 	}
