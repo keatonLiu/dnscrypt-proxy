@@ -586,11 +586,12 @@ func (proxy *Proxy) exchangeWithUDPServer(
 	return proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 }
 
-func (proxy *Proxy) exchangeWithUDPServerOnce(
+func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	serverInfo *ServerInfo,
 	sharedKey *[32]byte,
 	encryptedQuery []byte,
 	clientNonce []byte,
+	timeWait time.Duration,
 ) (resp []byte, sendTime *time.Time, err error) {
 	upstreamAddr := serverInfo.UDPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
@@ -626,8 +627,20 @@ func (proxy *Proxy) exchangeWithUDPServerOnce(
 	t := time.Now()
 	sendTime = &t
 
-	if _, err = pc.Write(encryptedQuery); err != nil {
-		return
+	if timeWait == 0 {
+		if _, err = pc.Write(encryptedQuery); err != nil {
+			return
+		}
+	} else {
+		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
+			return
+		}
+		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+		time.Sleep(timeWait)
+		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
+		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
+			return
+		}
 	}
 	var length int
 	length, err = pc.Read(encryptedResponse)
@@ -695,7 +708,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 			return
 		}
-		dlog.Noticef("Wait %vms before sending last 82 bytes", timeWait.Milliseconds())
+		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
@@ -1067,7 +1080,7 @@ func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
 
 	var response []byte
 	if serverProto == "udp" {
-		response, sendTime, err = proxy.exchangeWithUDPServerOnce(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce)
+		response, sendTime, err = proxy.exchangeWithUDPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
 	} else {
 		response, sendTime, err = proxy.exchangeWithTCPServerWithTimeWait(&serverInfoCpy, sharedKey, encryptedQuery, clientNonce, timeWait)
 	}
