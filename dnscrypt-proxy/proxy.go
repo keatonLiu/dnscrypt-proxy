@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -600,13 +601,15 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	}
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
+
+	host, port, _ := net.SplitHostPort(upstreamAddr.String())
 	if proxyDialer == nil {
 		if timeWait > 0 {
 			if upstreamAddr.IP.To4() == nil {
 				err = errors.New("time wait is not supported for ipv6")
 				return
 			}
-			pc, err = net.DialTimeout("ip4:udp", upstreamAddr.String(), serverInfo.Timeout)
+			pc, err = net.DialTimeout("ip4:udp", host, serverInfo.Timeout)
 		} else {
 			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
 		}
@@ -643,8 +646,9 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	} else {
 		frag1 := encryptedQuery[:len(encryptedQuery)-8]
 		frag2 := encryptedQuery[len(encryptedQuery)-8:] // 最小分片大小为8字节
-		frag1 = BuildUDPFragment(pc, frag1, 0, 2)
-		frag2 = BuildUDPFragment(pc, frag2, 1, 2)
+		port, _ := strconv.Atoi(port)
+		frag1 = BuildUDPFragment(pc, frag1, 0, 2, uint16(port))
+		frag2 = BuildUDPFragment(pc, frag2, 1, 2, uint16(port))
 
 		if _, err = pc.Write(frag1); err != nil {
 			if os.IsPermission(err) {
