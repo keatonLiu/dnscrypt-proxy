@@ -602,7 +602,7 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
 		if timeWait > 0 {
-			if !upstreamAddr.AddrPort().Addr().Is4() {
+			if upstreamAddr.IP.To4() == nil {
 				err = errors.New("time wait is not supported for ipv6")
 				return
 			}
@@ -648,8 +648,8 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 
 		if _, err = pc.Write(frag1); err != nil {
 			if os.IsPermission(err) {
-				fmt.Println("Error: Permission denied. This program requires root/administrator privileges.")
-				fmt.Println("Please run the program with elevated privileges and try again.")
+				dlog.Noticef("Error: Permission denied. This program requires root/administrator privileges.")
+				dlog.Noticef("Please run the program with elevated privileges and try again.")
 			}
 			return
 		}

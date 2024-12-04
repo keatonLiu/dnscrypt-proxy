@@ -82,12 +82,15 @@ func isValidPublicIP(ip net.IP) bool {
 
 	return true
 }
+func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments, destPort uint16) []byte {
+	const ipv4HeaderSize = 20
+	const udpHeaderSize = 8
 
-func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments uint16) []byte {
 	// Construct IP header
 	ipHeader := make([]byte, ipv4HeaderSize)
 	ipHeader[0] = 0x45 // Version(4) + Header Length(5)
-	binary.BigEndian.PutUint16(ipHeader[2:4], uint16(ipv4HeaderSize+len(data)))
+	totalLength := uint16(ipv4HeaderSize + udpHeaderSize + len(data))
+	binary.BigEndian.PutUint16(ipHeader[2:4], totalLength)
 
 	// Set fragmentation flags and offset
 	flags := uint16(0x2000) // "More fragments" flag
@@ -98,7 +101,7 @@ func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments
 	binary.BigEndian.PutUint16(ipHeader[6:8], flags|fragOffset)
 
 	ipHeader[8] = 64 // TTL
-	ipHeader[9] = 17 // UDP
+	ipHeader[9] = 17 // UDP protocol number
 
 	// Set source and destination IP
 	sourceIp, _, _ := net.SplitHostPort(conn.LocalAddr().String())
@@ -112,8 +115,27 @@ func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments
 	checksum := calculateChecksum(ipHeader)
 	binary.BigEndian.PutUint16(ipHeader[10:12], checksum)
 
-	// Combine packet
-	packet := append(ipHeader, data...)
+	// Construct UDP header
+	udpHeader := make([]byte, udpHeaderSize)
+	sourcePort := uint16(0) // Use any valid source port
+	if addr, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+		sourcePort = uint16(addr.Port)
+	}
+	binary.BigEndian.PutUint16(udpHeader[0:2], sourcePort)
+	binary.BigEndian.PutUint16(udpHeader[2:4], destPort)
+	binary.BigEndian.PutUint16(udpHeader[4:6], uint16(udpHeaderSize+len(data)))
+	udpHeader[6] = 0
+	udpHeader[7] = 0
+
+	// Combine UDP header and payload
+	udpPacket := append(udpHeader, data...)
+
+	// Calculate UDP checksum (optional, typically omitted for IPv4)
+	udpChecksum := calculateUDPChecksum(ipHeader, udpPacket)
+	binary.BigEndian.PutUint16(udpHeader[6:8], udpChecksum)
+
+	// Combine IP header and UDP packet
+	packet := append(ipHeader, udpPacket...)
 	return packet
 }
 
@@ -128,4 +150,28 @@ func calculateChecksum(data []byte) uint16 {
 	sum = (sum >> 16) + (sum & 0xffff)
 	sum = sum + (sum >> 16)
 	return uint16(^sum)
+}
+
+// Helper function: Calculate UDP checksum
+func calculateUDPChecksum(ipHeader, udpPacket []byte) uint16 {
+	var sum uint32
+	pseudoHeader := []byte{
+		ipHeader[12], ipHeader[13], ipHeader[14], ipHeader[15], // Source IP
+		ipHeader[16], ipHeader[17], ipHeader[18], ipHeader[19], // Destination IP
+		0, ipHeader[9], // Zero + Protocol (UDP = 17)
+		udpPacket[4], udpPacket[5], // UDP Length
+	}
+	for i := 0; i < len(pseudoHeader); i += 2 {
+		sum += uint32(binary.BigEndian.Uint16(pseudoHeader[i : i+2]))
+	}
+	for i := 0; i < len(udpPacket)-1; i += 2 {
+		sum += uint32(binary.BigEndian.Uint16(udpPacket[i : i+2]))
+	}
+	if len(udpPacket)%2 == 1 {
+		sum += uint32(udpPacket[len(udpPacket)-1]) << 8
+	}
+	for sum > 0xFFFF {
+		sum = (sum >> 16) + (sum & 0xFFFF)
+	}
+	return ^uint16(sum)
 }

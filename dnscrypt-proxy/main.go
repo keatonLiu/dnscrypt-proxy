@@ -241,7 +241,7 @@ func (app *App) startApi() {
 			c.JSON(http.StatusOK, gin.H{
 				"rtt":      rtt,
 				"server":   req,
-				"error":    err,
+				"error":    err.Error(),
 				"data":     resp,
 				"sendTime": sendTime,
 			})
