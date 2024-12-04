@@ -4,6 +4,7 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -600,7 +601,15 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 	if proxyDialer == nil {
-		pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
+		if timeWait > 0 {
+			if !upstreamAddr.AddrPort().Addr().Is4() {
+				err = errors.New("time wait is not supported for ipv6")
+				return
+			}
+			pc, err = net.DialTimeout("ip4:udp", upstreamAddr.String(), serverInfo.Timeout)
+		} else {
+			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
+		}
 	} else {
 		pc, err = (*proxyDialer).Dial("udp", upstreamAddr.String())
 	}
@@ -632,13 +641,22 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 			return
 		}
 	} else {
-		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
+		frag1 := encryptedQuery[:len(encryptedQuery)-8]
+		frag2 := encryptedQuery[len(encryptedQuery)-8:] // 最小分片大小为8字节
+		frag1 = BuildUDPFragment(pc, frag1, 0, 2)
+		frag2 = BuildUDPFragment(pc, frag2, 1, 2)
+
+		if _, err = pc.Write(frag1); err != nil {
+			if os.IsPermission(err) {
+				fmt.Println("Error: Permission denied. This program requires root/administrator privileges.")
+				fmt.Println("Please run the program with elevated privileges and try again.")
+			}
 			return
 		}
 		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
-		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
+		if _, err = pc.Write(frag2); err != nil {
 			return
 		}
 	}
