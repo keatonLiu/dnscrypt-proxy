@@ -733,7 +733,7 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 				continue
 			}
 			if strings.Contains(dev.Description, "Intel(R) Wi-Fi 6 AX200 160MHz") ||
-				strings.Contains(dev.Description, "ens") {
+				strings.Contains(dev.Name, "ens") {
 				dlog.Noticef("Using device: %v, description: %v", dev.Name, dev.Description)
 				handle, err = pcap.OpenLive(dev.Name, 1600, false, pcap.BlockForever)
 				break
