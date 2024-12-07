@@ -612,10 +612,6 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 				return
 			}
 			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
-			if err != nil {
-				return
-			}
-
 		} else {
 			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
 		}
@@ -653,6 +649,8 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 		// 构造 UDP 报文
 		host, port, _ := net.SplitHostPort(pc.LocalAddr().String())
 		localPort, _ := strconv.Atoi(port)
+		dlog.Noticef("Local host: %v, port: %v", host, localPort)
+		dlog.Noticef("Remote host: %v, port %v", upstreamAddr.IP, upstreamAddr.Port)
 		udp := &layers.UDP{
 			SrcPort: layers.UDPPort(localPort),
 			DstPort: layers.UDPPort(upstreamAddr.Port),
@@ -704,16 +702,23 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 		}
 
 		udpFrag2 := buffer2.Bytes()
+
+		eth := &layers.Ethernet{
+			EthernetType: layers.EthernetTypeIPv4,
+			SrcMAC:       net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+			DstMAC:       net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		}
+
 		// 序列化并发送分片
 		ipFrag1 := gopacket.NewSerializeBuffer()
-		err = gopacket.SerializeLayers(ipFrag1, options, ip, gopacket.Payload(udpFrag1))
+		err = gopacket.SerializeLayers(ipFrag1, options, eth, ip, gopacket.Payload(udpFrag1))
 		if err != nil {
 			dlog.Fatalf("Failed to serialize IP packet: %v", err)
 			return
 		}
 
 		ipFrag2 := gopacket.NewSerializeBuffer()
-		err = gopacket.SerializeLayers(ipFrag2, options, ip, gopacket.Payload(udpFrag2))
+		err = gopacket.SerializeLayers(ipFrag2, options, eth, ip, gopacket.Payload(udpFrag2))
 		if err != nil {
 			dlog.Fatalf("Failed to serialize IP packet: %v", err)
 			return
