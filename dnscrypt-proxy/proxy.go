@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
@@ -10,8 +9,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 	"math/rand"
 	"net"
 	"os"
@@ -693,7 +690,7 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 		}
 
 		ip.Flags = layers.IPv4DontFragment
-		ip.FragOffset = uint16(len(udpFrag1))
+		ip.FragOffset = uint16(len(udpFrag1) / 8)
 		err = udp.SetNetworkLayerForChecksum(ip)
 		if err != nil {
 			dlog.Fatalf("Failed to set network layer for checksum: %v", err)
@@ -729,9 +726,6 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 			return
 		}
 		for _, dev := range devs {
-			if dev.Name == "lo" {
-				continue
-			}
 			if strings.Contains(dev.Description, "Intel(R) Wi-Fi 6 AX200 160MHz") ||
 				strings.Contains(dev.Name, "ens") {
 				dlog.Noticef("Using device: %v, description: %v", dev.Name, dev.Description)
@@ -748,12 +742,7 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 
 		err = handle.WritePacketData(ipFrag1.Bytes())
 		if err != nil {
-			var b bytes.Buffer
-			wInUTF8 := transform.NewWriter(&b, simplifiedchinese.HZGB2312.NewEncoder())
-			// encode our string
-			wInUTF8.Write([]byte(err.Error()))
-			wInUTF8.Close()
-			dlog.Fatalf("Failed to write packet1: %v", b.String())
+			dlog.Fatalf("Failed to write packet1: %v", err)
 		}
 		dlog.Noticef("Wait %vms before sending last 8 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
