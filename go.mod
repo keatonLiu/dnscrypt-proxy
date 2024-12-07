@@ -9,6 +9,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185
 	github.com/gin-gonic/gin v1.9.1
+	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/hectane/go-acl v0.0.0-20230122075934-ca0b05cb1adb
@@ -27,6 +28,7 @@ require (
 	golang.org/x/crypto v0.15.0
 	golang.org/x/net v0.18.0
 	golang.org/x/sys v0.14.0
+	golang.org/x/text v0.14.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -81,7 +83,6 @@ require (
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/sync v0.4.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 	google.golang.org/grpc v1.53.0 // indirect

@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 	"math/rand"
 	"net"
 	"os"
@@ -602,14 +608,17 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
 
-	host, port, _ := net.SplitHostPort(upstreamAddr.String())
 	if proxyDialer == nil {
 		if timeWait > 0 {
 			if upstreamAddr.IP.To4() == nil {
 				err = errors.New("time wait is not supported for ipv6")
 				return
 			}
-			pc, err = net.DialTimeout("ip4:udp", host, serverInfo.Timeout)
+			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
+			if err != nil {
+				return
+			}
+
 		} else {
 			pc, err = net.DialTimeout("udp", upstreamAddr.String(), serverInfo.Timeout)
 		}
@@ -644,25 +653,130 @@ func (proxy *Proxy) exchangeWithUDPServerWithTimeWait(
 			return
 		}
 	} else {
-		frag1 := encryptedQuery[:len(encryptedQuery)-8]
-		frag2 := encryptedQuery[len(encryptedQuery)-8:] // 最小分片大小为8字节
-		port, _ := strconv.Atoi(port)
-		frag1 = BuildUDPFragment(pc, frag1, 0, 2, uint16(port))
-		frag2 = BuildUDPFragment(pc, frag2, 1, 2, uint16(port))
+		// 构造 UDP 报文
+		host, port, _ := net.SplitHostPort(pc.LocalAddr().String())
+		localPort, _ := strconv.Atoi(port)
+		udp := &layers.UDP{
+			SrcPort: layers.UDPPort(localPort),
+			DstPort: layers.UDPPort(upstreamAddr.Port),
+		}
+		// 构造 IP 报文
+		ip := &layers.IPv4{
+			Version:    4,
+			IHL:        5,
+			TOS:        0,
+			Length:     0, // 由 SerializeLayers 自动计算
+			Id:         uint16(rand.Intn(65535)),
+			Flags:      layers.IPv4MoreFragments,
+			FragOffset: 0,
+			TTL:        64,
+			Protocol:   layers.IPProtocolUDP,
+			SrcIP:      net.ParseIP(host),
+			DstIP:      upstreamAddr.IP,
+		}
 
-		if _, err = pc.Write(frag1); err != nil {
-			if os.IsPermission(err) {
-				dlog.Noticef("Error: Permission denied. This program requires root/administrator privileges.")
-				dlog.Noticef("Please run the program with elevated privileges and try again.")
-			}
+		err = udp.SetNetworkLayerForChecksum(ip)
+		dnsFrag1 := encryptedQuery[:len(encryptedQuery)-8]
+		dnsFrag2 := encryptedQuery[len(encryptedQuery)-8:]
+
+		buffer1 := gopacket.NewSerializeBuffer()
+		options := gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}
+		err = gopacket.SerializeLayers(buffer1, options, udp, gopacket.Payload(dnsFrag1))
+		if err != nil {
+			dlog.Fatalf("Failed to serialize UDP packet: %v", err)
+		}
+		udpFrag1 := buffer1.Bytes()
+
+		if err != nil {
+			dlog.Fatalf("Failed to set network layer for checksum: %v", err)
 			return
 		}
-		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
+
+		ip.Flags = layers.IPv4DontFragment
+		ip.FragOffset = uint16(len(udpFrag1))
+		err = udp.SetNetworkLayerForChecksum(ip)
+		if err != nil {
+			dlog.Fatalf("Failed to set network layer for checksum: %v", err)
+			return
+		}
+		buffer2 := gopacket.NewSerializeBuffer()
+		err = gopacket.SerializeLayers(buffer2, options, udp, gopacket.Payload(dnsFrag2))
+		if err != nil {
+			dlog.Fatalf("Failed to serialize UDP packet: %v", err)
+			return
+		}
+
+		udpFrag2 := buffer2.Bytes()
+		// 序列化并发送分片
+		ipFrag1 := gopacket.NewSerializeBuffer()
+		err = gopacket.SerializeLayers(ipFrag1, options, ip, gopacket.Payload(udpFrag1))
+		if err != nil {
+			dlog.Fatalf("Failed to serialize IP packet: %v", err)
+			return
+		}
+
+		ipFrag2 := gopacket.NewSerializeBuffer()
+		err = gopacket.SerializeLayers(ipFrag2, options, ip, gopacket.Payload(udpFrag2))
+		if err != nil {
+			dlog.Fatalf("Failed to serialize IP packet: %v", err)
+			return
+		}
+		// 使用 pcap 打开设备
+		var handle *pcap.Handle
+		var devs []pcap.Interface
+		devs, err = pcap.FindAllDevs()
+		if err != nil {
+			return
+		}
+		for _, dev := range devs {
+			if dev.Name == "lo" {
+				continue
+			}
+			if strings.Contains(dev.Description, "Intel(R) Wi-Fi 6 AX200 160MHz") {
+				dlog.Noticef("Using device: %v, description: %v", dev.Name, dev.Description)
+				handle, err = pcap.OpenLive(dev.Name, 1600, false, pcap.BlockForever)
+				break
+			}
+			dlog.Noticef("Device: %v, description: %v", dev.Name, dev.Description)
+		}
+		if err != nil || handle == nil {
+			dlog.Fatalf("Failed to open device: %v", err)
+			return
+		}
+		defer handle.Close()
+
+		err = handle.WritePacketData(ipFrag1.Bytes())
+		if err != nil {
+			var b bytes.Buffer
+			wInUTF8 := transform.NewWriter(&b, simplifiedchinese.HZGB2312.NewEncoder())
+			// encode our string
+			wInUTF8.Write([]byte(err.Error()))
+			wInUTF8.Close()
+			dlog.Fatalf("Failed to write packet1: %v", b.String())
+		}
+		dlog.Noticef("Wait %vms before sending last 8 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait)
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
-		if _, err = pc.Write(frag2); err != nil {
+
+		err = handle.WritePacketData(ipFrag2.Bytes())
+		if err != nil {
+			dlog.Fatalf("Failed to write packet2: %v", err)
 			return
 		}
+
+		//if _, err = pc.Write(dnsFrag1); err != nil {
+		//	if os.IsPermission(err) {
+		//		dlog.Noticef("Error: Permission denied. This program requires root/administrator privileges.")
+		//		dlog.Noticef("Please run the program with elevated privileges and try again.")
+		//	}
+		//	return
+		//}
+		//dlog.Noticef("Wait %vms before sending last 8 bytes", timeWait.Milliseconds())
+		//time.Sleep(timeWait)
+		//dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
+		//if _, err = pc.Write(dnsFrag2); err != nil {
+		//	return
+		//}
 	}
 	var length int
 	length, err = pc.Read(encryptedResponse)

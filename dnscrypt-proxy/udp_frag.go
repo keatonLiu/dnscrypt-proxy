@@ -4,6 +4,8 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"net"
+	"syscall"
+	"time"
 )
 
 const (
@@ -82,7 +84,7 @@ func isValidPublicIP(ip net.IP) bool {
 
 	return true
 }
-func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments, destPort uint16) []byte {
+func BuildUDPFragment(conn net.Conn, destPort uint16, data []byte, fragmentOffset, totalFragments uint16) []byte {
 	const ipv4HeaderSize = 20
 	const udpHeaderSize = 8
 
@@ -103,11 +105,11 @@ func BuildUDPFragment(conn net.Conn, data []byte, fragmentOffset, totalFragments
 	ipHeader[8] = 64 // TTL
 	ipHeader[9] = 17 // UDP protocol number
 
-	// Set source and destination IP
 	sourceIp, _, _ := net.SplitHostPort(conn.LocalAddr().String())
-	destIP, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	destIp, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	// Set source and destination IP
 	copy(ipHeader[12:16], net.ParseIP(sourceIp).To4())
-	copy(ipHeader[16:20], net.ParseIP(destIP).To4())
+	copy(ipHeader[16:20], net.ParseIP(destIp).To4())
 
 	// Calculate IP header checksum
 	ipHeader[10] = 0
@@ -174,4 +176,21 @@ func calculateUDPChecksum(ipHeader, udpPacket []byte) uint16 {
 		sum = (sum >> 16) + (sum & 0xFFFF)
 	}
 	return ^uint16(sum)
+}
+
+type Conn struct {
+	net.Conn // a net.Conn holding the connection
+	fd       syscall.Handle
+}
+
+func (c *Conn) Write(b []byte) (int, error) {
+	return syscall.Write(c.fd, b)
+}
+
+func (c *Conn) Read(b []byte) (int, error) {
+	return syscall.Read(c.fd, b)
+}
+
+func (c *Conn) SetDeadline(t time.Time) error {
+	return nil
 }
