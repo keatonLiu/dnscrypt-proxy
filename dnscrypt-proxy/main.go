@@ -191,7 +191,7 @@ func (app *App) Stop(service service.Service) error {
 
 func (app *App) startApi() {
 	if *app.flags.Profile {
-		go http.ListenAndServe(":8080", nil)
+		go http.ListenAndServe(":8081", nil)
 	}
 	go func() {
 		r := gin.Default()
