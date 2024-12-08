@@ -131,14 +131,6 @@ func main() {
 		}
 		return
 	}
-	if *flags.CpuProfile != "" {
-		f, err := os.Create(*flags.CpuProfile)
-		if err != nil {
-			dlog.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
 
 	app.startApi()
 
@@ -183,6 +175,15 @@ func (app *App) AppMain() {
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
 	app.proxy.StartProxy()
+
+	if *app.flags.CpuProfile != "" {
+		f, err := os.Create(*app.flags.CpuProfile)
+		if err != nil {
+			dlog.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 	runtime.GC()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
