@@ -238,10 +238,15 @@ func (app *App) startApi() {
 			resp, rtt, err := app.proxy.ResolveQuery(
 				req.ServerProtocol, req.Server,
 				req.RelayName, q, time.Duration(req.TimeWait)*time.Millisecond)
+
+			errorStr := ""
+			if err != nil {
+				errorStr = err.Error()
+			}
 			c.JSON(http.StatusOK, gin.H{
 				"rtt":      rtt,
 				"server":   req,
-				"error":    err.Error(),
+				"error":    errorStr,
 				"data":     resp,
 				"sendTime": sendTime,
 			})
