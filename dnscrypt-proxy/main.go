@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"slices"
 	"strconv"
 	"strings"
@@ -82,7 +83,7 @@ func main() {
 	flags.Child = flag.Bool("child", false, "Invokes program as a child process")
 	flags.NetprobeTimeoutOverride = flag.Int("netprobe-timeout", 60, "Override the netprobe timeout")
 	flags.ShowCerts = flag.Bool("show-certs", false, "print DoH certificate chain hashes")
-
+	flags.CpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
 	flag.Parse()
 
 	if *version {
@@ -129,6 +130,14 @@ func main() {
 			dlog.Notice("Service restarted")
 		}
 		return
+	}
+	if *flags.CpuProfile != "" {
+		f, err := os.Create(*flags.CpuProfile)
+		if err != nil {
+			dlog.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	app.startApi()

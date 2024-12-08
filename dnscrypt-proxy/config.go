@@ -302,6 +302,7 @@ type ConfigFlags struct {
 	Child                   *bool
 	NetprobeTimeoutOverride *int
 	ShowCerts               *bool
+	CpuProfile              *string
 }
 
 func findConfigFile(configFile *string) (string, error) {
