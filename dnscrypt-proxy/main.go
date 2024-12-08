@@ -15,9 +15,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math/rand"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"runtime/pprof"
 	"slices"
 	"strconv"
 	"strings"
@@ -83,7 +83,7 @@ func main() {
 	flags.Child = flag.Bool("child", false, "Invokes program as a child process")
 	flags.NetprobeTimeoutOverride = flag.Int("netprobe-timeout", 60, "Override the netprobe timeout")
 	flags.ShowCerts = flag.Bool("show-certs", false, "print DoH certificate chain hashes")
-	flags.CpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
+	flags.Profile = flag.Bool("prof", false, "Enable profiling")
 	flag.Parse()
 
 	if *version {
@@ -175,15 +175,6 @@ func (app *App) AppMain() {
 	app.quit = make(chan struct{})
 	app.wg.Add(1)
 	app.proxy.StartProxy()
-
-	if *app.flags.CpuProfile != "" {
-		f, err := os.Create(*app.flags.CpuProfile)
-		if err != nil {
-			dlog.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
 	runtime.GC()
 	<-app.quit
 	dlog.Notice("Quit signal received...")
@@ -199,6 +190,9 @@ func (app *App) Stop(service service.Service) error {
 }
 
 func (app *App) startApi() {
+	if *app.flags.Profile {
+		go dlog.Fatal(http.ListenAndServe(":8080", nil))
+	}
 	go func() {
 		r := gin.Default()
 		// gin.H is a shortcut for map[string]any
