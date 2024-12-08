@@ -88,6 +88,7 @@ type DosResult struct {
 	SuccessCount int     `json:"success_count"`
 	TotalCount   int     `json:"total_count"`
 	SuccessRate  float64 `json:"success_rate"`
+	TimeCost     int64   `json:"time_cost"`
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
@@ -412,13 +413,14 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 	var successCount atomic.Uint64
 
 	// adjust sendTime and arrivalTime
-	offset := NowUnixMillion() + 3000
+	offset := NowUnixMillion() + 1000
 	wg := sync.WaitGroup{}
 
 	if limit <= 0 {
 		limit = len(prepareList)
 	}
 
+	start := NowUnixMillion()
 	wg.Add(min(len(prepareList), limit))
 	for i, record := range prepareList {
 		recordCopy := record
@@ -511,6 +513,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 		successCount.Load(), float64(successCount.Load())/float64(totalCount.Load()))
 	log.Printf("Params: qtype: %s, multiLevel: %v", dns.TypeToString[qtype], multiLevel)
 
+	dosResult.TimeCost = NowUnixMillion() - start
 	dosResult.SuccessCount = int(successCount.Load())
 	dosResult.TotalCount = int(totalCount.Load())
 	dosResult.SuccessRate = float64(successCount.Load()) / float64(totalCount.Load())
