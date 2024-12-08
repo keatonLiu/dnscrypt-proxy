@@ -412,7 +412,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 	var successCount atomic.Uint64
 
 	// adjust sendTime and arrivalTime
-	offset := NowUnixMillion() + 1000
+	offset := NowUnixMillion() + 3000
 	wg := sync.WaitGroup{}
 
 	if limit <= 0 {
