@@ -851,7 +851,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
-		dlog.Infof("[%v] Failed to read response, err: %v", serverInfo.Name, err)
+		dlog.Infof("[%v] Failed to read response, err: %v, timeCost: %dms", serverInfo.Name, err, time.Since(t).Milliseconds())
 		return
 	}
 	bytes, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
