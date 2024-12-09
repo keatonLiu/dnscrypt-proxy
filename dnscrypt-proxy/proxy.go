@@ -837,18 +837,21 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		}
 	} else {
 		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
+			dlog.Debugf("[%v] Failed to write pkt1, err: %v", serverInfo.Name, err)
 			return
 		}
 		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 		time.Sleep(timeWait - time.Since(t))
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
+			dlog.Debugf("[%v] Failed to write pkt2, err: %v", serverInfo.Name, err)
 			return
 		}
 	}
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
+		dlog.Infof("[%v] Failed to read response, err: %v", serverInfo.Name, err)
 		return
 	}
 	bytes, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
