@@ -89,6 +89,7 @@ type DosResult struct {
 	TotalCount   int     `json:"total_count"`
 	SuccessRate  float64 `json:"success_rate"`
 	TimeCost     int64   `json:"time_cost"`
+	ExtraCost    int64   `json:"extra_cost"`
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
@@ -507,6 +508,8 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			successCount.Add(1)
 		}(recordCopy, i)
 	}
+
+	dosResult.ExtraCost = NowUnixMillion() - start
 	wg.Wait()
 
 	log.Printf("DOS finised with %d/%d success: %d success rate: %.2f", totalCount.Load(), len(prepareList),
