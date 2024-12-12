@@ -262,12 +262,10 @@ func (app *App) startApi() {
 				qtype = dns.TypeA
 			}
 
-			multiLevelStr, exists := c.GetQuery("multiLevel")
-			multiLevel := strings.ToLower(multiLevelStr) == "true"
 			limit := c.Query("limit")
 			probeId, _ := c.GetQuery("probeId")
 			limitInt, _ := strconv.Atoi(limit)
-			result := app.dos(qtype, multiLevel, limitInt, probeId)
+			result := app.dos(qtype, limitInt, probeId)
 			c.JSON(http.StatusOK, gin.H{
 				"msg":   "ok",
 				"stats": result,

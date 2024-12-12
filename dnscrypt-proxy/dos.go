@@ -370,12 +370,11 @@ type PrepareListRecord struct {
 	Pending    bool               `bson:"pending"`
 }
 
-func (app *App) dos(qtype uint16, multiLevel bool, limit int, probeId string) (dosResult *DosResult) {
+func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResult) {
 	dosResult = &DosResult{}
 	ctx := context.Background()
 	filter := bson.M{
-		"probe_id":    bson.M{"$exists": true},
-		"multi_level": multiLevel,
+		"probe_id": bson.M{"$exists": true},
 	}
 	// creat mongodb client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
@@ -384,8 +383,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int, probeId string) (d
 		return
 	}
 	filter = bson.M{
-		"probe_id":    probeId,
-		"multi_level": multiLevel,
+		"probe_id": probeId,
 	}
 	dlog.Infof("Latest probe_id: %v", probeId)
 	// fetch prepare list
@@ -402,7 +400,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int, probeId string) (d
 		return
 	}
 	dlog.Infof("Prepared list length: %d", len(prepareList))
-
+	multiLevel := prepareList[0].MultiLevel
 	// clear result collection
 	collectionResult := client.Database("odns").Collection("result")
 	if _, err := collectionResult.DeleteMany(ctx, filter); err != nil {
