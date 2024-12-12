@@ -240,8 +240,8 @@ func (app *App) startApi() {
 
 			sendTime := NowUnixMillion()
 			resp, rtt, err := app.proxy.ResolveQuery(
-				req.ServerProtocol, req.Server,
-				req.RelayName, q, time.Duration(req.TimeWait)*time.Millisecond)
+				req.ServerProtocol, app.proxy.getServerInfoByName(req.Server),
+				app.proxy.GetRelayByName(req.RelayName), q, time.Duration(req.TimeWait)*time.Millisecond)
 
 			errorStr := ""
 			if err != nil {
@@ -459,8 +459,8 @@ func (app *App) startApi() {
 				q.SetQuestion(dns.Fqdn(name), dns.TypeA)
 
 				res, rtt, err := app.proxy.ResolveQuery(
-					"tcp", server,
-					relayName, q, 0)
+					"tcp", app.proxy.getServerInfoByName(server),
+					app.proxy.GetRelayByName(relayName), q, 0)
 				if err != nil {
 					dlog.Warn(err)
 					break
