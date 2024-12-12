@@ -517,6 +517,52 @@ func (proxy *Proxy) GetRelayByName(relayName string) *Relay {
 	return nil
 }
 
+func (proxy *Proxy) buildRelayMap() map[string]*Relay {
+	proxy.serversInfo.RLock()
+	defer proxy.serversInfo.RUnlock()
+
+	relayMap := make(map[string]*Relay)
+	for _, registeredServer := range proxy.serversInfo.registeredRelays {
+		relayStamp := registeredServer.stamp
+		if relayStamp.Proto == stamps.StampProtoTypeDNSCryptRelay {
+			relayUDPAddr, err := net.ResolveUDPAddr("udp", relayStamp.ServerAddrStr)
+			if err != nil {
+				continue
+			}
+			relayTCPAddr, err := net.ResolveTCPAddr("tcp", relayStamp.ServerAddrStr)
+			if err != nil {
+				continue
+			}
+			relayMap[registeredServer.name] = &Relay{
+				Proto:    stamps.StampProtoTypeDNSCryptRelay,
+				Dnscrypt: &DNSCryptRelay{RelayUDPAddr: relayUDPAddr, RelayTCPAddr: relayTCPAddr},
+			}
+		} else if relayStamp.Proto == stamps.StampProtoTypeODoHRelay {
+			relayBaseURL, err := url.Parse(
+				"https://" + url.PathEscape(relayStamp.ProviderName) + relayStamp.Path,
+			)
+			if err != nil {
+				continue
+			}
+			relayMap[registeredServer.name] = &Relay{Proto: stamps.StampProtoTypeODoHRelay, ODoH: &ODoHRelay{
+				URL: relayBaseURL,
+			}}
+		}
+	}
+	return relayMap
+}
+
+func (proxy *Proxy) buildServerMap() map[string]*ServerInfo {
+	proxy.serversInfo.RLock()
+	defer proxy.serversInfo.RUnlock()
+
+	serverMap := make(map[string]*ServerInfo)
+	for _, server := range proxy.serversInfo.inner {
+		serverMap[server.Name] = server
+	}
+	return serverMap
+}
+
 func route(proxy *Proxy, name string, serverProto stamps.StampProtoType) (*Relay, error) {
 	routes := proxy.routes
 	if routes == nil {

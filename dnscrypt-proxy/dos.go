@@ -135,7 +135,8 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 	defer func() {
 		stats.Running = false
 	}()
-
+	serverMap := app.proxy.buildServerMap()
+	relayMap := app.proxy.buildRelayMap()
 	for i := 0; i < iterTime; i++ {
 		for j := 0; j < groupSize; j++ {
 			index := i*groupSize + j
@@ -171,7 +172,7 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 							// Send query
 							q := app.buildQuery(server, relay, dns.TypeTXT, multiLevel)
 
-							resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, 0)
+							resp, sendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, 0)
 							stats.CurrentCount.Add(1)
 							if err != nil || resp == nil || sendTime == nil {
 								dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
@@ -239,6 +240,10 @@ func (app *App) probeDelay() {
 	if err != nil {
 		log.Warnf("Unable to create index: %v", err)
 	}
+
+	serverMap := app.proxy.buildServerMap()
+	relayMap := app.proxy.buildRelayMap()
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(relays))
 	for _, relay := range relays {
@@ -249,7 +254,7 @@ func (app *App) probeDelay() {
 				server := app.proxy.serversInfo.getOne().Name
 				//server := app.proxy.serversInfo.inner[0].Name
 				q := app.buildQuery(server, relay, dns.TypeTXT, false)
-				resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(delay)*time.Millisecond)
+				resp, sendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, time.Duration(delay)*time.Millisecond)
 				if err != nil || resp == nil || sendTime == nil || len(resp.Answer) == 0 {
 					dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
 					continue
@@ -304,6 +309,9 @@ func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
 func (app *App) randomQueryTest(num int, qtype uint16, timeWaitMillion int) {
 	wg := sync.WaitGroup{}
 	wg.Add(num)
+
+	serverMap := app.proxy.buildServerMap()
+	relayMap := app.proxy.buildRelayMap()
 	for i := 0; i < num; i++ {
 		go func() {
 			defer wg.Done()
@@ -314,7 +322,7 @@ func (app *App) randomQueryTest(num int, qtype uint16, timeWaitMillion int) {
 			// build query
 			q := app.buildQuery(server, relay, qtype, false)
 			// send query
-			resp, realRtt, err := app.proxy.ResolveQuery("tcp", server, relay, q, time.Duration(timeWaitMillion)*time.Millisecond)
+			resp, realRtt, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, time.Duration(timeWaitMillion)*time.Millisecond)
 			if err != nil || resp == nil {
 				log.Warn(fmt.Sprintf("server: %s, relay: %s, err: %v", server, relay, err))
 				return
@@ -422,6 +430,9 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 		limit = len(prepareList)
 	}
 
+	serverMap := app.proxy.buildServerMap()
+	relayMap := app.proxy.buildRelayMap()
+
 	start := NowUnixMillion()
 	wg.Add(min(len(prepareList), limit))
 	for i, record := range prepareList {
@@ -453,7 +464,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 
 			resolveStart := NowUnixMillion()
 			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
-			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q, timeWait)
+			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, timeWait)
 			dlog.Infof("Resolve cost: %dms", NowUnixMillion()-resolveStart)
 
 			totalCount.Add(1)
@@ -481,34 +492,32 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				}
 				realArriveTime = txtJson.RecvTime
 			}
-			_ = rtt
-			_ = realArriveTime
-			_ = arriveTime
-			//if _, err = collectionResult.InsertOne(ctx, bson.M{
-			//	"server":           server,
-			//	"relay":            relay,
-			//	"multi_level":      multiLevel,
-			//	"send_time":        sendTime,
-			//	"real_send_time":   sendTimeMs,
-			//	"send_time_diff":   sendTimeDiff,
-			//	"arrive_time":      arriveTime,
-			//	"real_arrive_time": realArriveTime,
-			//	"arrive_time_diff": realArriveTime - arriveTime,
-			//	"real_rtt":         rtt,
-			//	"rtt":              record.Rtt,
-			//	"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
-			//	"stt":              record.Stt,
-			//	"std":              record.Std,
-			//	"probe_id":         probeId,
-			//	"qname":            q.Question[0].Name,
-			//	"qtype":            dns.TypeToString[q.Question[0].Qtype],
-			//	"update_time":      time.Now().Format("2006-01-02 15:04:05"),
-			//	"index":            index,
-			//	"method":           record.Method,
-			//	"size":             q.Len(),
-			//}); err != nil {
-			//	log.Errorf("Unable to save to mongodb: %v", err)
-			//}
+
+			if _, err = collectionResult.InsertOne(ctx, bson.M{
+				"server":           server,
+				"relay":            relay,
+				"multi_level":      multiLevel,
+				"send_time":        sendTime,
+				"real_send_time":   sendTimeMs,
+				"send_time_diff":   sendTimeDiff,
+				"arrive_time":      arriveTime,
+				"real_arrive_time": realArriveTime,
+				"arrive_time_diff": realArriveTime - arriveTime,
+				"real_rtt":         rtt,
+				"rtt":              record.Rtt,
+				"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
+				"stt":              record.Stt,
+				"std":              record.Std,
+				"probe_id":         probeId,
+				"qname":            q.Question[0].Name,
+				"qtype":            dns.TypeToString[q.Question[0].Qtype],
+				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
+				"index":            index,
+				"method":           record.Method,
+				"size":             q.Len(),
+			}); err != nil {
+				log.Errorf("Unable to save to mongodb: %v", err)
+			}
 
 			successCount.Add(1)
 		}(recordCopy, i)
@@ -529,6 +538,15 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 	return
 }
 
+func (app *App) relayMap(prepareList []*PrepareListRecord) {
+	relayMap := make(map[string]*Relay)
+	for _, record := range prepareList {
+		if relayMap[record.Relay] == nil {
+			relayMap[record.Relay] = app.proxy.GetRelayByName(record.Relay)
+		}
+	}
+}
+
 func (app *App) dosPending(qtype uint16, multiLevel bool) {
 	server := "myserver"
 	relay := "myrelay"
@@ -536,6 +554,9 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 	// make a query for {server}-{relay}-{#randomStr}.test.xxt.asia
 	qps := 10
 	sendInterval := 1000 / qps
+
+	serverMap := app.proxy.buildServerMap()
+	relayMap := app.proxy.buildRelayMap()
 
 	wg := sync.WaitGroup{}
 	wg.Add(qps)
@@ -545,7 +566,7 @@ func (app *App) dosPending(qtype uint16, multiLevel bool) {
 		time.Sleep(time.Duration(sendInterval) * time.Millisecond)
 		go func() {
 			q := app.buildQuery(server, relay, qtype, multiLevel)
-			resp, sendTime, err := app.proxy.ResolveQuery("tcp", server, relay, q,
+			resp, sendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q,
 				time.Duration(delay)*time.Millisecond)
 			if err != nil || sendTime == nil {
 				log.Warnf("err: %v, sendTime: %v", err, sendTime)

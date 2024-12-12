@@ -1188,29 +1188,25 @@ func (proxy *Proxy) ListAvailableRelays() {
 	}
 }
 
-func (proxy *Proxy) ResolveQuery(serverProto string, serverName string,
-	relayName string, query *dns.Msg, timeWait time.Duration) (resp *dns.Msg, sendTime *time.Time, err error) {
+func (proxy *Proxy) ResolveQuery(serverProto string, server *ServerInfo,
+	relay *Relay, query *dns.Msg, timeWait time.Duration) (resp *dns.Msg, sendTime *time.Time, err error) {
 
 	queryBytes, err := query.Pack()
 	if err != nil {
 		dlog.Errorf("Unable to pack query: %v, query: %v", err, query)
 		return
 	}
-	var serverInfo *ServerInfo
-	serverInfo = proxy.getServerInfoByName(serverName)
 
-	if serverInfo == nil {
-		err = fmt.Errorf("server [%s] not found", serverName)
+	if server == nil {
+		dlog.Warnf("Server is nil, query: %v", query.Question[0].Name)
 		return
 	}
-
-	relay := proxy.GetRelayByName(relayName)
 	if relay == nil {
-		err = fmt.Errorf("relay [%s] not found", relayName)
+		dlog.Warnf("Relay is nil， query: %v", query.Question[0].Name)
 		return
 	}
 
-	serverInfoCpy := *serverInfo
+	serverInfoCpy := *server
 	serverInfoCpy.Relay = relay
 
 	sharedKey, encryptedQuery, clientNonce, err := proxy.Encrypt(&serverInfoCpy, queryBytes, serverProto)
