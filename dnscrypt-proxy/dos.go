@@ -481,32 +481,34 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				}
 				realArriveTime = txtJson.RecvTime
 			}
-
-			if _, err = collectionResult.InsertOne(ctx, bson.M{
-				"server":           server,
-				"relay":            relay,
-				"multi_level":      multiLevel,
-				"send_time":        sendTime,
-				"real_send_time":   sendTimeMs,
-				"send_time_diff":   sendTimeDiff,
-				"arrive_time":      arriveTime,
-				"real_arrive_time": realArriveTime,
-				"arrive_time_diff": realArriveTime - arriveTime,
-				"real_rtt":         rtt,
-				"rtt":              record.Rtt,
-				"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
-				"stt":              record.Stt,
-				"std":              record.Std,
-				"probe_id":         probeId,
-				"qname":            q.Question[0].Name,
-				"qtype":            dns.TypeToString[q.Question[0].Qtype],
-				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
-				"index":            index,
-				"method":           record.Method,
-				"size":             q.Len(),
-			}); err != nil {
-				log.Errorf("Unable to save to mongodb: %v", err)
-			}
+			_ = rtt
+			_ = realArriveTime
+			_ = arriveTime
+			//if _, err = collectionResult.InsertOne(ctx, bson.M{
+			//	"server":           server,
+			//	"relay":            relay,
+			//	"multi_level":      multiLevel,
+			//	"send_time":        sendTime,
+			//	"real_send_time":   sendTimeMs,
+			//	"send_time_diff":   sendTimeDiff,
+			//	"arrive_time":      arriveTime,
+			//	"real_arrive_time": realArriveTime,
+			//	"arrive_time_diff": realArriveTime - arriveTime,
+			//	"real_rtt":         rtt,
+			//	"rtt":              record.Rtt,
+			//	"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
+			//	"stt":              record.Stt,
+			//	"std":              record.Std,
+			//	"probe_id":         probeId,
+			//	"qname":            q.Question[0].Name,
+			//	"qtype":            dns.TypeToString[q.Question[0].Qtype],
+			//	"update_time":      time.Now().Format("2006-01-02 15:04:05"),
+			//	"index":            index,
+			//	"method":           record.Method,
+			//	"size":             q.Len(),
+			//}); err != nil {
+			//	log.Errorf("Unable to save to mongodb: %v", err)
+			//}
 
 			successCount.Add(1)
 		}(recordCopy, i)

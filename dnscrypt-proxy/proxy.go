@@ -840,8 +840,9 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			dlog.Warnf("[%v] Failed to write pkt1, err: %v", serverInfo.Name, err)
 			return
 		}
+		timeWait = timeWait - time.Since(t)
 		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
-		time.Sleep(timeWait - time.Since(*sendStart))
+		time.Sleep(timeWait)
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			dlog.Warnf("[%v] Failed to write pkt2, err: %v", serverInfo.Name, err)
