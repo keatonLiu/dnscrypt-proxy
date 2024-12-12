@@ -847,7 +847,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		time.Sleep(timeWait)
 		diff := time.Since(sleepStart) - timeWait
 		if diff > 1*time.Second {
-			dlog.Debugf("Real sleep time: %vms, expected: %vms, diff: %vms",
+			dlog.Warnf("Real sleep time: %vms, expected: %vms, diff: %vms",
 				time.Since(t).Milliseconds(), timeWait.Milliseconds(), diff.Milliseconds())
 		}
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
@@ -859,7 +859,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
-		dlog.Debugf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
+		dlog.Warnf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
 			serverInfo.Name, err, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 		return
 	} else {
