@@ -857,7 +857,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			serverInfo.Name, err, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 		return
 	} else {
-		dlog.Infof("[%v] Succeeded to read response, totalCost: %dms, readCost: %dms",
+		dlog.Debugf("[%v] Succeeded to read response, totalCost: %dms, readCost: %dms",
 			serverInfo.Name, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 	}
 	bytes, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
