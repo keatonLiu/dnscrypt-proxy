@@ -853,7 +853,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			return
 		}
 		dlog.Noticef("[%v] pkt2 writeCost: %vms", serverInfo.Name, time.Since(writeStart2).Milliseconds())
-
+	}
 	readStart := time.Now()
 	encryptedResponse, err := ReadPrefixed(&pc)
 
