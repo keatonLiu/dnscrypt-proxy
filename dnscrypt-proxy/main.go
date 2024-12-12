@@ -50,6 +50,15 @@ type Stats struct {
 	Concurrent   int          `json:"concurrent"`
 }
 
+func MaxParallelism() int {
+	maxProcs := runtime.GOMAXPROCS(0)
+	numCPU := runtime.NumCPU()
+	if maxProcs < numCPU {
+		return maxProcs
+	}
+	return numCPU
+}
+
 func main() {
 	tzErr := TimezoneSetup()
 	dlog.Init("dnscrypt-proxy", dlog.SeverityNotice, "DAEMON")
@@ -130,7 +139,7 @@ func main() {
 		}
 		return
 	}
-
+	dlog.Infof("Max cores: %v", MaxParallelism())
 	app.startApi()
 
 	if svc != nil {
