@@ -836,7 +836,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			return
 		}
 	} else {
-		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-8]); err != nil {
+		if _, err = pc.Write(encryptedQuery[:len(encryptedQuery)-2]); err != nil {
 			dlog.Warnf("[%v] Failed to write pkt1, err: %v", serverInfo.Name, err)
 			return
 		}
@@ -850,7 +850,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			dlog.Warnf("Real sleep time: %vms, expected: %vms, diff: %vms",
 				time.Since(t).Milliseconds(), timeWait.Milliseconds(), diff.Milliseconds())
 		}
-		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-8:]); err != nil {
+		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			dlog.Warnf("[%v] Failed to write pkt2, err: %v", serverInfo.Name, err)
 			return
 		}

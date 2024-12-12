@@ -401,6 +401,7 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 	}
 	dlog.Infof("Prepared list length: %d", len(prepareList))
 	multiLevel := prepareList[0].MultiLevel
+	pending := prepareList[0].Pending
 	// clear result collection
 	collectionResult := client.Database("odns").Collection("result")
 	if _, err := collectionResult.DeleteMany(ctx, filter); err != nil {
@@ -492,6 +493,7 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 				"server":           server,
 				"relay":            relay,
 				"multi_level":      multiLevel,
+				"pending":          pending,
 				"send_time":        sendTime,
 				"real_send_time":   sendTimeMs,
 				"send_time_diff":   sendTimeDiff,
