@@ -801,7 +801,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedQuery []byte,
 	clientNonce []byte,
 	timeWait time.Duration,
-) (bytes []byte, sendTime *time.Time, err error) {
+) (bytes []byte, sendStart *time.Time, err error) {
 	upstreamAddr := serverInfo.TCPAddr
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
@@ -830,7 +830,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	}
 
 	t := timeNow()
-	sendTime = &t
+	sendStart = &t
 	if timeWait == 0 {
 		if _, err = pc.Write(encryptedQuery); err != nil {
 			return
@@ -841,7 +841,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			return
 		}
 		dlog.Noticef("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
-		time.Sleep(timeWait - time.Since(t))
+		time.Sleep(timeWait - time.Since(*sendStart))
 		dlog.Noticef("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			dlog.Warnf("[%v] Failed to write pkt2, err: %v", serverInfo.Name, err)
@@ -853,12 +853,12 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
-		dlog.Warnf("[%v] Failed to read response, err: %v, timeCost: %dms, readCost: %dms", serverInfo.Name, err,
-			time.Since(t).Milliseconds(), time.Since(readStart))
+		dlog.Warnf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
+			serverInfo.Name, err, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 		return
 	} else {
-		dlog.Infof("[%v] Succeeded to read response, timeCost: %dms, readCost: %dms", serverInfo.Name,
-			time.Since(t).Milliseconds(), time.Since(readStart))
+		dlog.Infof("[%v] Succeeded to read response, totalCost: %dms, readCost: %dms",
+			serverInfo.Name, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 	}
 	bytes, err = proxy.Decrypt(serverInfo, sharedKey, encryptedResponse, clientNonce)
 	return
