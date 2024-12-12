@@ -90,6 +90,7 @@ type DosResult struct {
 	SuccessRate  float64 `json:"success_rate"`
 	TimeCost     int64   `json:"time_cost"`
 	ExtraCost    int64   `json:"extra_cost"`
+	ProbeId      string  `json:"probe_id"`
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
@@ -522,6 +523,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 	dosResult.SuccessCount = int(successCount.Load())
 	dosResult.TotalCount = int(totalCount.Load())
 	dosResult.SuccessRate = float64(successCount.Load()) / float64(totalCount.Load())
+	dosResult.ProbeId = probeId
 	return
 }
 
