@@ -1198,11 +1198,11 @@ func (proxy *Proxy) ResolveQuery(serverProto string, server *ServerInfo,
 	}
 
 	if server == nil {
-		dlog.Warnf("Server is nil, query: %v", query.Question[0].Name)
+		err = errors.New(fmt.Sprintf("Server is nil, query: %v", query.Question[0].Name))
 		return
 	}
 	if relay == nil {
-		dlog.Warnf("Relay is nil， query: %v", query.Question[0].Name)
+		err = errors.New(fmt.Sprintf("Relay is nil, query: %v", query.Question[0].Name))
 		return
 	}
 
