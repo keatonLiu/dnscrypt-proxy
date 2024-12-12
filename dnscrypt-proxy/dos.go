@@ -466,7 +466,7 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 			totalCount.Add(1)
 
 			if err != nil || len(resp.Answer) == 0 || realSendTime == nil {
-				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
+				dlog.Debugf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
 				return
 			}
 			sendTimeMs := realSendTime.UnixMilli()

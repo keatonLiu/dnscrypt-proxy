@@ -853,7 +853,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
-		dlog.Warnf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
+		dlog.Debugf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
 			serverInfo.Name, err, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 		return
 	} else {
