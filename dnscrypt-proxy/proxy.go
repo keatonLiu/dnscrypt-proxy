@@ -806,6 +806,8 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	if serverInfo.Relay != nil && serverInfo.Relay.Dnscrypt != nil {
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
 	}
+	t := timeNow()
+	sendStart = &t
 
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
@@ -829,8 +831,6 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		return
 	}
 
-	t := timeNow()
-	sendStart = &t
 	if timeWait == 0 {
 		if _, err = pc.Write(encryptedQuery); err != nil {
 			return
@@ -840,10 +840,16 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			dlog.Warnf("[%v] Failed to write pkt1, err: %v", serverInfo.Name, err)
 			return
 		}
+		timeWait = timeWait - time.Since(t)
 		dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
-		time.Sleep(timeWait)
-		dlog.Debugf("Real sleep time: %v, expected: %v, diff: %v", time.Since(t), timeWait, time.Since(t)-timeWait)
 
+		sleepStart := time.Now()
+		time.Sleep(timeWait)
+		diff := time.Since(sleepStart) - timeWait
+		if diff > 1*time.Second {
+			dlog.Debugf("Real sleep time: %vms, expected: %vms, diff: %vms",
+				time.Since(t).Milliseconds(), timeWait.Milliseconds(), diff.Milliseconds())
+		}
 		if _, err = pc.Write(encryptedQuery[len(encryptedQuery)-2:]); err != nil {
 			dlog.Warnf("[%v] Failed to write pkt2, err: %v", serverInfo.Name, err)
 			return
@@ -853,7 +859,7 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 	encryptedResponse, err := ReadPrefixed(&pc)
 
 	if err != nil {
-		dlog.Warnf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
+		dlog.Debugf("[%v] Failed to read response, err: %v, totalCost: %dms, readCost: %dms",
 			serverInfo.Name, err, time.Since(*sendStart).Milliseconds(), time.Since(readStart).Milliseconds())
 		return
 	} else {
