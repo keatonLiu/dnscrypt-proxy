@@ -473,7 +473,7 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 			resolveStart := NowUnixMillion()
 			timeWait := time.Duration(record.TimeWait-int(sendTimeDiff)) * time.Millisecond
 			resp, realSendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, timeWait)
-			dlog.Infof("Resolve cost: %dms", NowUnixMillion()-resolveStart)
+			dlog.Debugf("Resolve cost: %dms", NowUnixMillion()-resolveStart)
 
 			totalCount.Add(1)
 
