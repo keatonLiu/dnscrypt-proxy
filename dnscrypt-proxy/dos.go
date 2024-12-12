@@ -473,7 +473,6 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
 				return
 			}
-			dlog.Noticef("here")
 			sendTimeMs := realSendTime.UnixMilli()
 			rtt := NowUnixMillion() - sendTimeMs
 
