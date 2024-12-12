@@ -18,7 +18,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -266,9 +265,9 @@ func (app *App) startApi() {
 			multiLevelStr, exists := c.GetQuery("multiLevel")
 			multiLevel := strings.ToLower(multiLevelStr) == "true"
 			limit := c.Query("limit")
-
+			probeId, _ := c.GetQuery("probeId")
 			limitInt, _ := strconv.Atoi(limit)
-			result := app.dos(qtype, multiLevel, limitInt)
+			result := app.dos(qtype, multiLevel, limitInt, probeId)
 			c.JSON(http.StatusOK, gin.H{
 				"msg":   "ok",
 				"stats": result,
@@ -467,23 +466,6 @@ func (app *App) startApi() {
 				}
 				fmt.Println(res)
 				fmt.Printf("rtt: %dms\n", rtt)
-			case "dos":
-				multiLevel := slices.Contains(args, "multi")
-				if len(args) == 0 {
-					app.dos(dns.TypeTXT, multiLevel, 0)
-				} else {
-					qtype, exists := dns.StringToType[strings.ToUpper(args[0])]
-					if !exists {
-						qtype = dns.TypeTXT
-					}
-
-					if len(args) == 2 {
-						limit, _ := strconv.Atoi(args[1])
-						app.dos(qtype, multiLevel, limit)
-					} else {
-						app.dos(qtype, multiLevel, 0)
-					}
-				}
 			}
 		}
 	}()

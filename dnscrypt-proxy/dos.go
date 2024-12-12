@@ -370,7 +370,7 @@ type PrepareListRecord struct {
 	Pending    bool               `bson:"pending"`
 }
 
-func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosResult) {
+func (app *App) dos(qtype uint16, multiLevel bool, limit int, probeId string) (dosResult *DosResult) {
 	dosResult = &DosResult{}
 	ctx := context.Background()
 	filter := bson.M{
@@ -383,23 +383,13 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 		dlog.Errorf("Unable to connect to mongodb: %v", err)
 		return
 	}
-	// find latest probe
-	collection := client.Database("odns").Collection("prepare")
-	result := collection.FindOne(ctx, filter, options.FindOne().SetSort(bson.D{{"probe_id", -1}}))
-	var latestProbe *PrepareListRecord
-	err = result.Decode(&latestProbe)
-	if latestProbe == nil || err != nil {
-		dlog.Errorf("Unable to find latest probe multi_level: %v, err: %v", multiLevel, err)
-		return
-	}
-
-	probeId := latestProbe.ProbeId
 	filter = bson.M{
 		"probe_id":    probeId,
 		"multi_level": multiLevel,
 	}
 	dlog.Infof("Latest probe_id: %v", probeId)
-	// find all with latest probe_id
+	// fetch prepare list
+	collection := client.Database("odns").Collection("prepare")
 	cursor, err := collection.Find(ctx, filter, options.Find().
 		SetSort(bson.D{{"send_time", 1}}))
 	if err != nil {
