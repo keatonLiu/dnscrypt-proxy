@@ -14,6 +14,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"math/rand"
 	"net"
+	"os"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -432,6 +434,12 @@ func (app *App) dos(qtype uint16, multiLevel bool, limit int) (dosResult *DosRes
 
 	serverMap := app.proxy.buildServerMap()
 	relayMap := app.proxy.buildRelayMap()
+	f, err := os.Create("cpu.prof")
+	if err != nil {
+		log.Fatal(err)
+	}
+	pprof.StartCPUProfile(f)
+	defer pprof.StopCPUProfile()
 
 	start := NowUnixMillion()
 	wg.Add(min(len(prepareList), limit))
