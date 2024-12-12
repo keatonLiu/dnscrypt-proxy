@@ -139,7 +139,7 @@ func main() {
 		}
 		return
 	}
-	dlog.Infof("Max cores: %v", MaxParallelism())
+	dlog.Noticef("Max cores: %v", MaxParallelism())
 	app.startApi()
 
 	if svc != nil {
