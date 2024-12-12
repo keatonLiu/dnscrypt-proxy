@@ -466,7 +466,7 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 			totalCount.Add(1)
 
 			if err != nil || len(resp.Answer) == 0 || realSendTime == nil {
-				dlog.Debugf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
+				dlog.Warnf("Response is empty: %s,%s, err: %v, resp: %v, timeWait: %dms", server, relay, err, resp, timeWait.Milliseconds())
 				return
 			}
 			sendTimeMs := realSendTime.UnixMilli()
@@ -488,35 +488,31 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 				realArriveTime = txtJson.RecvTime
 			}
 
-			_ = rtt
-			_ = realArriveTime
-			_ = arriveTime
-
-			//if _, err = collectionResult.InsertOne(ctx, bson.M{
-			//	"server":           server,
-			//	"relay":            relay,
-			//	"multi_level":      multiLevel,
-			//	"send_time":        sendTime,
-			//	"real_send_time":   sendTimeMs,
-			//	"send_time_diff":   sendTimeDiff,
-			//	"arrive_time":      arriveTime,
-			//	"real_arrive_time": realArriveTime,
-			//	"arrive_time_diff": realArriveTime - arriveTime,
-			//	"real_rtt":         rtt,
-			//	"rtt":              record.Rtt,
-			//	"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
-			//	"stt":              record.Stt,
-			//	"std":              record.Std,
-			//	"probe_id":         probeId,
-			//	"qname":            q.Question[0].Name,
-			//	"qtype":            dns.TypeToString[q.Question[0].Qtype],
-			//	"update_time":      time.Now().Format("2006-01-02 15:04:05"),
-			//	"index":            index,
-			//	"method":           record.Method,
-			//	"size":             q.Len(),
-			//}); err != nil {
-			//	log.Errorf("Unable to save to mongodb: %v", err)
-			//}
+			if _, err = collectionResult.InsertOne(ctx, bson.M{
+				"server":           server,
+				"relay":            relay,
+				"multi_level":      multiLevel,
+				"send_time":        sendTime,
+				"real_send_time":   sendTimeMs,
+				"send_time_diff":   sendTimeDiff,
+				"arrive_time":      arriveTime,
+				"real_arrive_time": realArriveTime,
+				"arrive_time_diff": realArriveTime - arriveTime,
+				"real_rtt":         rtt,
+				"rtt":              record.Rtt,
+				"rtt_diff":         rtt - int64(record.Rtt+float64(record.TimeWait)),
+				"stt":              record.Stt,
+				"std":              record.Std,
+				"probe_id":         probeId,
+				"qname":            q.Question[0].Name,
+				"qtype":            dns.TypeToString[q.Question[0].Qtype],
+				"update_time":      time.Now().Format("2006-01-02 15:04:05"),
+				"index":            index,
+				"method":           record.Method,
+				"size":             q.Len(),
+			}); err != nil {
+				log.Errorf("Unable to save to mongodb: %v", err)
+			}
 
 			successCount.Add(1)
 		}(recordCopy, i)
