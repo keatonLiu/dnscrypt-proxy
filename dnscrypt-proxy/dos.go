@@ -96,7 +96,7 @@ type DosResult struct {
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
-	servers, relays, srList := app.buildSRList()
+	servers, relays, srList := app.buildSRListBaseLine()
 
 	collection := app.mongoClient.Database("odns").Collection("probe")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
@@ -278,6 +278,21 @@ func (app *App) probeDelay() {
 	dlog.Noticef("Probe delay finished")
 }
 
+func (app *App) buildSRListBaseLine() ([]*ServerInfo, []RegisteredServer, []SRPair) {
+	servers := app.proxy.serversInfo.inner
+	relays := app.proxy.registeredRelays
+	srList := make([]SRPair, 0)
+	for _, server := range servers {
+		for _, relay := range relays {
+			srList = append(srList, SRPair{
+				Server: server.Name,
+				Relay:  relay.getName(),
+			})
+		}
+	}
+	return servers, relays, srList
+}
+
 // 最小探测负载算法
 func (app *App) buildSRList() ([]*ServerInfo, []RegisteredServer, []SRPair) {
 	// Iterate through all servers and relays
@@ -373,16 +388,14 @@ type PrepareListRecord struct {
 func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResult) {
 	dosResult = &DosResult{}
 	ctx := context.Background()
-	filter := bson.M{
-		"probe_id": bson.M{"$exists": true},
-	}
+
 	// creat mongodb client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(app.proxy.MongoUri))
 	if err != nil {
 		dlog.Errorf("Unable to connect to mongodb: %v", err)
 		return
 	}
-	filter = bson.M{
+	filter := bson.M{
 		"probe_id": probeId,
 	}
 	dlog.Infof("Latest probe_id: %v", probeId)
