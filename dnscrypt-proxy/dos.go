@@ -176,40 +176,50 @@ func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel b
 
 							resp, sendTime, err := app.proxy.ResolveQuery("tcp", serverMap[server], relayMap[relay], q, 0)
 							stats.CurrentCount.Add(1)
-							if err != nil || resp == nil || sendTime == nil {
-								dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
-								stats.FailCount.Add(1)
-								return
-							} else if len(resp.Answer) == 0 {
-								stats.FailCount.Add(1)
-								dlog.Warnf("Probe failed: %s,%s, resp.Answer is empty", server, relay)
-								return
-							}
 							sendTimeMs := sendTime.UnixMilli()
 							rtt := NowUnixMillion() - sendTimeMs
 
-							txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
-							txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
-							var txtResp *ResolveResponseTXTBody
-							_ = json.Unmarshal(txtData, &txtResp)
-
-							// Save to mongodb
-							_, err = collection.InsertOne(context.TODO(), bson.M{
-								"server":      server,
-								"relay":       relay,
-								"recv_ip":     txtResp.RecvIp.IP,
-								"recv_port":   txtResp.RecvIp.Port,
-								"send_time":   sendTimeMs,
-								"recv_time":   txtResp.RecvTime,
-								"multi_level": multiLevel,
-								"rtt":         rtt,
-								"stt":         txtResp.RecvTime - sendTimeMs,
-								"probe_id":    probeId,
-								"qname":       q.Question[0].Name,
-								"qtype":       dns.TypeToString[q.Question[0].Qtype],
-								"update_time": time.Now().Format("2006-01-02 15:04:05"),
-								"batch":       k,
-							})
+							if err != nil || resp == nil || sendTime == nil || len(resp.Answer) == 0 {
+								dlog.Warnf("Probe failed: %s,%s, err: %v, resp: %v", server, relay, err, resp)
+								stats.FailCount.Add(1)
+								_, err = collection.InsertOne(context.TODO(), bson.M{
+									"server":      server,
+									"relay":       relay,
+									"send_time":   sendTimeMs,
+									"multi_level": multiLevel,
+									"rtt":         rtt,
+									"probe_id":    probeId,
+									"qname":       q.Question[0].Name,
+									"qtype":       dns.TypeToString[q.Question[0].Qtype],
+									"update_time": time.Now().Format("2006-01-02 15:04:05"),
+									"batch":       k,
+									"success":     false,
+								})
+								return
+							} else {
+								var txtResp *ResolveResponseTXTBody
+								txtDataEncoded := resp.Answer[0].(*dns.TXT).Txt[0]
+								txtData, _ := base64.StdEncoding.DecodeString(txtDataEncoded)
+								_ = json.Unmarshal(txtData, &txtResp)
+								// Save to mongodb
+								_, err = collection.InsertOne(context.TODO(), bson.M{
+									"server":      server,
+									"relay":       relay,
+									"recv_ip":     txtResp.RecvIp.IP,
+									"recv_port":   txtResp.RecvIp.Port,
+									"send_time":   sendTimeMs,
+									"recv_time":   txtResp.RecvTime,
+									"multi_level": multiLevel,
+									"rtt":         rtt,
+									"stt":         txtResp.RecvTime - sendTimeMs,
+									"probe_id":    probeId,
+									"qname":       q.Question[0].Name,
+									"qtype":       dns.TypeToString[q.Question[0].Qtype],
+									"update_time": time.Now().Format("2006-01-02 15:04:05"),
+									"batch":       k,
+									"success":     true,
+								})
+							}
 
 							if err != nil {
 								dlog.Warnf("Unable to save to mongodb: %v", err)
