@@ -96,7 +96,7 @@ type DosResult struct {
 }
 
 func (app *App) probe(probeId string, limit int, maxConcurrent int, multiLevel bool) {
-	servers, relays, srList := app.buildSRListBaseLine()
+	servers, relays, srList := app.buildSRList()
 
 	collection := app.mongoClient.Database("odns").Collection("probe")
 	_, err := collection.Indexes().CreateOne(context.Background(), mongo.IndexModel{
