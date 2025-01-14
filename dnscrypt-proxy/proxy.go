@@ -807,7 +807,6 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 		upstreamAddr = serverInfo.Relay.Dnscrypt.RelayTCPAddr
 	}
 	t := timeNow()
-	sendStart = &t
 
 	var pc net.Conn
 	proxyDialer := proxy.xTransport.proxyDialer
@@ -840,6 +839,10 @@ func (proxy *Proxy) exchangeWithTCPServerWithTimeWait(
 			dlog.Warnf("[%v] Failed to write pkt1, err: %v", serverInfo.Name, err)
 			return
 		}
+
+		realSendTime := time.Now()
+		sendStart = &realSendTime
+
 		timeWait = timeWait - time.Since(t)
 		dlog.Debugf("Wait %vms before sending last 2 bytes", timeWait.Milliseconds())
 

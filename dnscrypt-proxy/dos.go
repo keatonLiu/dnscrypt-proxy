@@ -408,7 +408,7 @@ func (app *App) dos(qtype uint16, limit int, probeId string) (dosResult *DosResu
 	filter := bson.M{
 		"probe_id": probeId,
 	}
-	dlog.Infof("Latest probe_id: %v", probeId)
+	dlog.Infof("probe_id: %v", probeId)
 	// fetch prepare list
 	collection := client.Database("odns").Collection("prepare")
 	cursor, err := collection.Find(ctx, filter, options.Find().
